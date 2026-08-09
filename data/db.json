@@ -1,0 +1,86 @@
+{
+  "settings": {
+    "appId": "1062583589573156",
+    "appSecret": "3e270e4e623e1d2ac851dd3fccbc97bc",
+    "updatedAt": "2026-08-09T06:58:47.744Z"
+  },
+  "accounts": [
+    {
+      "id": "726155563894891",
+      "name": "Đồ Án Tốt Nghiệp",
+      "category": "Công ty công nghệ thông tin",
+      "accessToken": "EAAPGagVmkiQBSDWZC3sjYHexOMBT9F2WiAYkkdGZBDSjG2Hwywkvz7ZCrTSpZBCVyiv6g7ANjB95Qz2H3LXhKkF2hCBi9ASxiul45ctjlBGFr5q6805PjZAuCMsIVuG1iiCVwJnNrsXaZBlqXZBYgyeGyBRlDzQtGj8ZCwONOt0N9R1DrsQ8T68nEFoyrUhS0Tis5ouiSEjd",
+      "avatar": "https://scontent.fsgn2-8.fna.fbcdn.net/v/t39.30808-1/513073022_122095654724928077_5564876557242781203_n.png?stp=dst-png_s200x200&_nc_cat=102&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeHFsXWGDB_trCTdfX8f4zlz70zAcLqHdOXvTMBwuod05WvwZVoWzfzyzm9Xu_bzT5v_dbs2aO-HLd8bmj-gxs5e&_nc_ohc=5lqKpeqCeyMQ7kNvwFgJzhI&_nc_oc=AdpDW20pwtonU67yMhN83wXuWRpbaE5i0-Twdgbqc9eGlxvffYMTKtMHRVQLa6u5aug&_nc_zt=24&_nc_ht=scontent.fsgn2-8.fna&edm=AGaHXAAEAAAA&_nc_gid=26yinUuA47qnYh_pOvENsg&_nc_tpa=Q5bMBQIFLiI8Tt6UonipkS8avi4fTHfcjWeiejiov7VQ5kaoyQXa6X0HloFEJN4E14Rlg3cJcPd6gJzT2w&oh=00_AQFiQqPWGjyPlBwzdQg-YSpRItl0f2LyHDN8kg0w2qszEw&oe=6A7DF661",
+      "platform": "facebook",
+      "createdAt": "2026-08-09T06:40:39.561Z",
+      "updatedAt": "2026-08-09T06:58:48.621Z"
+    },
+    {
+      "id": "535269419675887",
+      "name": "Devprogenz2",
+      "category": "Công ty công nghệ thông tin",
+      "accessToken": "EAAPGagVmkiQBSORwYFBI4nRUWrJ6uNFCt1W540Vw5ZAZCeP7SK3tcZAG51XezRjIc1kKQdFNcPIWtaOpa9ORBRZAQ2LpFt8nqqWqTz0cPbfecoHvhyttRNkrf7jbLmK4yjs7MXsAu9FZAHUdazRAoxkSGmYYBGhP5wZBF50tz7lrz2bh25WAZB2RF3fKjHLzfXgJatjL5t4",
+      "avatar": "https://scontent.fsgn2-9.fna.fbcdn.net/v/t39.30808-1/480493993_122111840240754602_4648667244334510483_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=106&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGrmfmfguZX8YL18Ef-QkgM_MynTJL4dln8zKdMkvh2WbdaGIVxDV1h5HkD3KShUf2o_U-NyBf2_OLp-RrKNpio&_nc_ohc=ll5MDbjfnwcQ7kNvwHfAqly&_nc_oc=Adp0ixBj9awtuPQnafyNlZhdr_7hR1bzhqhuA2hl916ZmZKC9AMUUauWCWLw-XBHEeU&_nc_zt=24&_nc_ht=scontent.fsgn2-9.fna&edm=AGaHXAAEAAAA&_nc_gid=26yinUuA47qnYh_pOvENsg&_nc_tpa=Q5bMBQKI8snanFibbBEqFxt8-c1-9z_TQo0e6coJoEqYnSGk4JQ6SX7mSSVPC1iQTPAjvLrRH1R46BtDAg&oh=00_AQGFNZETlLfpVE5ZmvA9gdibMagxfLf6m_7MZ9AmSEbeFw&oe=6A7DEC2D",
+      "platform": "facebook",
+      "createdAt": "2026-08-09T06:40:39.834Z",
+      "updatedAt": "2026-08-09T06:58:49.299Z"
+    },
+    {
+      "id": "1734209501244048",
+      "name": "Hiếu",
+      "username": "Hiếu",
+      "avatar": "https://platform-lookaside.fbsbx.com/platform/profilepic/?asid=1734209501244048&height=50&width=50&ext=1788850730&hash=Aft911HY8qWUQ2RjzR2Vu0z-",
+      "accessToken": "EAAPGagVmkiQBSI0DZCWF40yaY5hxQ4Yx7ZAimD7309DRU9rfAtLSqnMdmLzleT3b6dM3ULrkXn0O2rX2ySyuAN6fJnODHOIU99iprrN98lbGnGLG8ZCVlP6SDzeH9oQFbAFCKZAWLd9H4sAtYWZCOmhSQtylyynXRZACfcMUFZBcI6VwI64cZB50Yo09wrgMz6cK",
+      "platform": "threads",
+      "createdAt": "2026-08-09T06:40:41.061Z",
+      "updatedAt": "2026-08-09T06:58:50.629Z"
+    }
+  ],
+  "posts": [
+    {
+      "id": "post_1786257812901_7gpxs",
+      "title": "🤖 AI đang thay đổi cuộc sống như thế nào?",
+      "caption": "Trí tuệ nhân tạo (AI) đang trở thành một phần quan trọng trong cuộc sống hiện đại. Từ việc hỗ trợ viết nội dung, tạo hình ảnh, phân tích dữ liệu đến tự động hóa công việc, AI giúp con người tiết kiệm thời gian và nâng cao hiệu suất.\n\nTrong tương lai, AI không nhất thiết thay thế con người, mà những người biết sử dụng AI hiệu quả sẽ có lợi thế lớn hơn trong công việc và kinh doanh.",
+      "hashtags": "#reels #trending #viral",
+      "mediaUrl": "http://localhost:5000/uploads/media_1786257795395_n4mqmo.jpg",
+      "mediaType": "image",
+      "platforms": [
+        "facebook",
+        "instagram",
+        "threads"
+      ],
+      "status": "published",
+      "scheduledAt": null,
+      "results": {
+        "facebook_726155563894891": {
+          "accountName": "Đồ Án Tốt Nghiệp",
+          "platform": "facebook",
+          "success": true,
+          "postId": "726155563894891_122182950290928077",
+          "postUrl": "https://www.facebook.com/726155563894891_122182950290928077"
+        },
+        "facebook_535269419675887": {
+          "accountName": "Devprogenz2",
+          "platform": "facebook",
+          "success": true,
+          "postId": "535269419675887_122206415024754602",
+          "postUrl": "https://www.facebook.com/535269419675887_122206415024754602"
+        },
+        "instagram": {
+          "success": false,
+          "error": "Chưa có tài khoản Instagram nào được kết nối. Hãy vào Cài đặt Fanpage Meta -> Linked Accounts để liên kết Instagram Business/Creator."
+        },
+        "threads_1734209501244048": {
+          "accountName": "Hiếu",
+          "platform": "threads",
+          "success": false,
+          "error": "Threads Error: (#3) Application does not have the capability to make this API call."
+        }
+      },
+      "createdAt": "2026-08-09T06:43:32.901Z",
+      "updatedAt": "2026-08-09T07:16:44.623Z",
+      "publishedAt": "2026-08-09T07:16:44.623Z"
+    }
+  ],
+  "logs": []
+}
