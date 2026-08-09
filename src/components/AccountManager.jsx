@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Facebook, Instagram, AtSign, Trash2, CheckCircle2, ShieldAlert, RefreshCw, HelpCircle } from 'lucide-react';
+import { Key, Facebook, Trash2, CheckCircle2, ShieldAlert, RefreshCw, HelpCircle, ExternalLink } from 'lucide-react';
 
 export default function AccountManager({ accounts, fetchAccounts, onOpenGuide }) {
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [tokenInput, setTokenInput] = useState('');
-  const [tokenType, setTokenType] = useState('facebook'); // 'facebook' | 'threads'
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
 
-  // Fetch App Settings on mount
   useEffect(() => {
     fetchSettings();
   }, []);
@@ -48,7 +46,6 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     setMessage(null);
 
     try {
-      // Save settings first
       if (appId || appSecret) {
         await saveSettings();
       }
@@ -56,7 +53,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       const res = await fetch('/api/accounts/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenInput.trim(), type: tokenType })
+        body: JSON.stringify({ token: tokenInput.trim() })
       });
 
       const data = await res.json();
@@ -69,7 +66,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       fetchAccounts();
       setMessage({
         type: 'success',
-        text: `Đã kết nối thành công ${data.addedCount} tài khoản! Token đã được tự động xử lý.`
+        text: `Tải thành công ${data.addedCount} Fanpage Facebook! Danh sách đã được cập nhật.`
       });
     } catch (err) {
       setMessage({ type: 'error', text: err.message });
@@ -78,11 +75,11 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
-  const handleDeleteAccount = async (id, platform) => {
-    if (!window.confirm(`Bạn có chắc muốn xóa tài khoản này khỏi danh sách?`)) return;
+  const handleDeleteAccount = async (id) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa Fanpage này khỏi ứng dụng?`)) return;
 
     try {
-      const res = await fetch(`/api/accounts/${platform}/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/accounts/facebook/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (data.success) {
         fetchAccounts();
@@ -91,6 +88,8 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       alert('Không thể xóa tài khoản');
     }
   };
+
+  const fbAccounts = accounts.filter(a => a.platform === 'facebook');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -112,22 +111,48 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
         </div>
       )}
 
-      {/* Grid: App Settings & Token Connector */}
+      {/* Grid: App Credentials & Token Connector */}
       <div className="grid-2">
-        {/* 1. App API Credentials (Optional for Long-lived token auto-exchange) */}
+        {/* 1. Token Input Form */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Key size={20} color="#1877f2" />
-              Meta App Credentials
+          <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Facebook size={20} color="#1877f2" />
+            Kết Nối Access Token Fanpage
+          </h3>
+
+          <form onSubmit={handleConnectToken}>
+            <div className="form-group">
+              <label className="form-label">Access Token (Dán token lấy từ Graph API Explorer)</label>
+              <textarea
+                className="textarea-field"
+                style={{ minHeight: '110px', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                placeholder="Dán mã EAAPGagVmkiQ..."
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
+            </div>
+
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '14px' }} disabled={loading}>
+              {loading ? <RefreshCw className="animate-spin" size={18} /> : null}
+              {loading ? 'Đang kiểm tra & quét Fanpage...' : '🚀 Kết Nối & Quét Danh Sách Fanpage'}
+            </button>
+          </form>
+        </div>
+
+        {/* 2. Meta App Credentials */}
+        <div className="glass-card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Key size={18} color="#1877f2" />
+              Meta App Credentials (Tùy chọn)
             </h3>
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.8rem' }} onClick={onOpenGuide}>
-              <HelpCircle size={14} /> Cách Lấy Token
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={onOpenGuide}>
+              <HelpCircle size={14} /> Hướng Dẫn
             </button>
           </div>
 
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: '1.5' }}>
-            (Tùy chọn) Nhập App ID và App Secret từ Meta Developer Console để hệ thống tự động đổi token 1 giờ thành <b>Long-Lived Token (60 ngày / Vĩnh viễn)</b>.
+          <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+            Nhập App ID & Secret để ứng dụng tự đổi token 1 giờ thành <b>Long-Lived Token (60 ngày / Vĩnh viễn)</b>.
           </p>
 
           <div className="form-group">
@@ -135,7 +160,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
             <input
               type="text"
               className="input-field"
-              placeholder="Ví dụ: 123456789012345"
+              placeholder="1062583589573156"
               value={appId}
               onChange={(e) => setAppId(e.target.value)}
             />
@@ -146,7 +171,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
             <input
               type="password"
               className="input-field"
-              placeholder="Ví dụ: e4d909c290d..."
+              placeholder="App Secret..."
               value={appSecret}
               onChange={(e) => setAppSecret(e.target.value)}
             />
@@ -156,72 +181,24 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
             Lưu Cấu Hình App
           </button>
         </div>
-
-        {/* 2. Token Input & Connection Form */}
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <RefreshCw size={20} color="#e1306c" />
-            Kết Nối Access Token Nội Bộ
-          </h3>
-
-          <form onSubmit={handleConnectToken}>
-            <div className="form-group">
-              <label className="form-label">Loại Token Connect</label>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  type="button"
-                  className={`platform-chip facebook ${tokenType === 'facebook' ? 'selected' : ''}`}
-                  onClick={() => setTokenType('facebook')}
-                  style={{ flex: 1, padding: '10px', justifyContent: 'center' }}
-                >
-                  <Facebook size={18} /> Meta User / Page Token
-                </button>
-                <button
-                  type="button"
-                  className={`platform-chip threads ${tokenType === 'threads' ? 'selected' : ''}`}
-                  onClick={() => setTokenType('threads')}
-                  style={{ flex: 1, padding: '10px', justifyContent: 'center' }}
-                >
-                  <AtSign size={18} /> Threads Token
-                </button>
-              </div>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Access Token (Dán token lấy từ Graph Explorer)</label>
-              <textarea
-                className="textarea-field"
-                style={{ minHeight: '90px', fontSize: '0.85rem', fontFamily: 'monospace' }}
-                placeholder="EAAXXXXXX..."
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-              {loading ? <RefreshCw className="animate-spin" size={18} /> : null}
-              {loading ? 'Đang kiểm tra & tải tài khoản...' : 'Kết Nối Tất Cả Tài Khoản'}
-            </button>
-          </form>
-        </div>
       </div>
 
-      {/* Connected Accounts List Section */}
+      {/* Connected Facebook Pages List Section */}
       <div className="glass-card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          Danh Sách Tài Khoản Đã Kết Nối ({accounts.length})
+          <Facebook color="#1877f2" /> Danh Sách Fanpage Đã Kết Nối ({fbAccounts.length})
         </h3>
 
-        {accounts.length === 0 ? (
+        {fbAccounts.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <ShieldAlert size={48} style={{ opacity: 0.4, marginBottom: '12px' }} />
-            <p>Chưa có tài khoản nào được kết nối. Vui lòng dán Access Token phía trên để tự động nhận diện Facebook Pages, Instagram Accounts & Threads!</p>
+            <p>Chưa có Fanpage nào. Vui lòng dán Access Token phía trên để tự động nhận diện tất cả Fanpage!</p>
           </div>
         ) : (
           <div className="grid-3">
-            {accounts.map((acc) => (
+            {fbAccounts.map((acc) => (
               <div 
-                key={`${acc.platform}_${acc.id}`} 
+                key={acc.id} 
                 className="glass-card" 
                 style={{ 
                   padding: '16px', 
@@ -236,7 +213,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                     <img 
                       src={acc.avatar} 
                       alt={acc.name} 
-                      style={{ width: '42px', height: '42px', borderRadius: '50%', objectFit: 'cover' }} 
+                      style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} 
                     />
                   ) : (
                     <div className="avatar-placeholder">{acc.name.substring(0, 2).toUpperCase()}</div>
@@ -244,23 +221,25 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
 
                   <div>
                     <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{acc.name}</h4>
-                    <span 
-                      className={`platform-chip ${acc.platform} selected`}
-                      style={{ fontSize: '0.7rem', padding: '2px 8px', marginTop: '4px' }}
-                    >
-                      {acc.platform === 'facebook' && <Facebook size={12} />}
-                      {acc.platform === 'instagram' && <Instagram size={12} />}
-                      {acc.platform === 'threads' && <AtSign size={12} />}
-                      {acc.platform.toUpperCase()}
-                    </span>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{acc.category || 'Facebook Page'}</span>
+                    <div style={{ marginTop: '4px' }}>
+                      <a 
+                        href={`https://www.facebook.com/${acc.id}`} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        style={{ fontSize: '0.725rem', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}
+                      >
+                        ID: {acc.id} <ExternalLink size={10} />
+                      </a>
+                    </div>
                   </div>
                 </div>
 
                 <button 
                   className="btn btn-danger" 
                   style={{ padding: '8px', borderRadius: '50%' }}
-                  onClick={() => handleDeleteAccount(acc.id, acc.platform)}
-                  title="Xóa tài khoản"
+                  onClick={() => handleDeleteAccount(acc.id)}
+                  title="Xóa Fanpage này"
                 >
                   <Trash2 size={16} />
                 </button>

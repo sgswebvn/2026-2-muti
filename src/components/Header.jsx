@@ -1,16 +1,16 @@
 import React from 'react';
-import { Share2, Users, FileText, Settings, BookOpen } from 'lucide-react';
+import { Facebook, Users, FileText, Settings, BookOpen } from 'lucide-react';
 
 export default function Header({ activeTab, setActiveTab, accountCount, onOpenGuide }) {
   return (
     <header className="glass-card app-header">
       <div className="brand">
         <div className="brand-icon">
-          <Share2 size={24} color="#ffffff" />
+          <Facebook size={26} color="#ffffff" />
         </div>
         <div>
-          <h1 className="brand-title">Meta Cross-Publisher</h1>
-          <p className="brand-subtitle">Facebook Page • Instagram Business • Threads</p>
+          <h1 className="brand-title">Facebook Multi-Publisher</h1>
+          <p className="brand-subtitle">Đăng Bài & Reels Tự Động Cho Nhiều Fanpage Facebook</p>
         </div>
       </div>
 
@@ -20,7 +20,7 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           onClick={() => setActiveTab('publish')}
         >
           <FileText size={18} />
-          <span>Đăng Bài Nhanh</span>
+          <span>Đăng Bài Fanpage</span>
         </button>
 
         <button
@@ -28,7 +28,7 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           onClick={() => setActiveTab('accounts')}
         >
           <Users size={18} />
-          <span>Tài Khoản Meta ({accountCount})</span>
+          <span>Quản Lý Fanpage ({accountCount})</span>
         </button>
 
         <button
@@ -36,7 +36,7 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           onClick={() => setActiveTab('history')}
         >
           <Settings size={18} />
-          <span>Lịch Sử & Lên Lịch</span>
+          <span>Lịch Sử Bài Đăng</span>
         </button>
 
         <button
@@ -45,7 +45,7 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           onClick={onOpenGuide}
         >
           <BookOpen size={18} />
-          <span>HD Đăng Ký API</span>
+          <span>HD Đăng Ký Token</span>
         </button>
       </nav>
     </header>

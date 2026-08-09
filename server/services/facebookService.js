@@ -41,6 +41,21 @@ export async function publishToFacebook(pageAccount, postData) {
         }
       });
       const postId = res.data.id;
+
+      // Auto First Comment if specified
+      if (postData.firstComment && postId) {
+        try {
+          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
+            params: {
+              message: postData.firstComment,
+              access_token: accessToken
+            }
+          });
+        } catch (commentErr) {
+          console.warn('Facebook Feed Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
+        }
+      }
+
       return {
         success: true,
         postId: postId,
@@ -77,6 +92,21 @@ export async function publishToFacebook(pageAccount, postData) {
       }
 
       const postId = res.data.post_id || res.data.id;
+
+      // Auto First Comment if specified
+      if (postData.firstComment && postId) {
+        try {
+          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
+            params: {
+              message: postData.firstComment,
+              access_token: accessToken
+            }
+          });
+        } catch (commentErr) {
+          console.warn('Facebook Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
+        }
+      }
+
       return {
         success: true,
         postId: postId,
@@ -113,6 +143,21 @@ export async function publishToFacebook(pageAccount, postData) {
       }
 
       const videoId = res.data.id;
+
+      // Auto First Comment if specified
+      if (postData.firstComment && videoId) {
+        try {
+          await axios.post(`${GRAPH_URL}/${videoId}/comments`, null, {
+            params: {
+              message: postData.firstComment,
+              access_token: accessToken
+            }
+          });
+        } catch (commentErr) {
+          console.warn('Facebook Video Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
+        }
+      }
+
       return {
         success: true,
         postId: videoId,

@@ -53,7 +53,11 @@ class LocalDB {
 
   getSettings() {
     this.read();
-    return this.data.settings || defaultData.settings;
+    const settings = this.data.settings || defaultData.settings;
+    if (!settings.securityPin) {
+      settings.securityPin = '123456'; // Default security PIN
+    }
+    return settings;
   }
 
   saveSettings(settings) {
@@ -61,6 +65,22 @@ class LocalDB {
     this.data.settings = { ...this.data.settings, ...settings, updatedAt: new Date().toISOString() };
     this.write();
     return this.data.settings;
+  }
+
+  verifyPin(pin) {
+    this.read();
+    const currentPin = this.getSettings().securityPin || '123456';
+    return String(pin).trim() === String(currentPin).trim();
+  }
+
+  updatePin(newPin) {
+    this.read();
+    if (!newPin || String(newPin).trim().length < 4) {
+      throw new Error('Mã PIN bảo mật phải có ít nhất 4 ký tự.');
+    }
+    this.data.settings.securityPin = String(newPin).trim();
+    this.write();
+    return true;
   }
 
   getAccounts() {
@@ -99,9 +119,12 @@ class LocalDB {
       title: post.title || '',
       caption: post.caption || '',
       hashtags: post.hashtags || '',
+      firstComment: post.firstComment || '',
       mediaUrl: post.mediaUrl || '',
       mediaType: post.mediaType || 'image', // 'image' | 'video'
+      postFormat: post.postFormat || 'standard', // 'standard' | 'reel'
       platforms: post.platforms || ['facebook', 'instagram', 'threads'],
+      targetAccountIds: post.targetAccountIds || [],
       status: post.scheduledAt ? 'scheduled' : 'draft', // 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed'
       scheduledAt: post.scheduledAt || null,
       results: {}, // platform -> { status, postUrl, error }

@@ -1,10 +1,8 @@
 import { db } from '../db.js';
 import { publishToFacebook } from './facebookService.js';
-import { publishToInstagram } from './instagramService.js';
-import { publishToThreads } from './threadsService.js';
 
 /**
- * Execute publishing a post to selected connected accounts
+ * Execute publishing a post to selected connected Facebook Pages
  * @param {string} postId ID of the post in db
  */
 export async function executePostPublish(postId) {
@@ -18,57 +16,46 @@ export async function executePostPublish(postId) {
   // Update status to publishing
   db.updatePost(postId, { status: 'publishing' });
 
-  const accounts = db.getAccounts();
-  const targetPlatforms = post.platforms || ['facebook', 'instagram', 'threads'];
+  const accounts = db.getAccounts().filter(a => a.platform === 'facebook');
   const results = {};
 
+  // Filter by user-selected target Facebook Page IDs if specified
+  let targetPages = accounts;
+  if (post.targetAccountIds && Array.isArray(post.targetAccountIds) && post.targetAccountIds.length > 0) {
+    targetPages = accounts.filter(a => post.targetAccountIds.includes(a.id));
+  }
+
+  if (targetPages.length === 0) {
+    db.updatePost(postId, {
+      status: 'failed',
+      results: {
+        facebook: {
+          success: false,
+          error: 'Chưa chọn Fanpage nào hoặc chưa kết nối tài khoản Facebook.'
+        }
+      }
+    });
+    return { postId, status: 'failed', results };
+  }
+
   let successCount = 0;
-  let totalCount = 0;
 
-  for (const platform of targetPlatforms) {
-    const platformAccounts = accounts.filter(a => a.platform === platform);
+  for (const pageAcc of targetPages) {
+    const res = await publishToFacebook(pageAcc, post);
 
-    if (platformAccounts.length === 0) {
-      totalCount++;
-      let errorMsg = `Chưa kết nối tài khoản ${platform.toUpperCase()} nào.`;
-      if (platform === 'instagram') {
-        errorMsg = 'Chưa có tài khoản Instagram nào được kết nối. Hãy vào Cài đặt Fanpage Meta -> Linked Accounts để liên kết Instagram Business/Creator.';
-      } else if (platform === 'threads') {
-        errorMsg = 'Chưa kết nối tài khoản Threads. Cần cấp quyền threads_basic & threads_content_publish trong Meta Explorer.';
-      }
+    results[`facebook_${pageAcc.id}`] = {
+      accountName: pageAcc.name,
+      platform: 'facebook',
+      pageId: pageAcc.id,
+      ...res
+    };
 
-      results[platform] = {
-        success: false,
-        error: errorMsg
-      };
-      continue;
-    }
-
-    // Publish to all connected accounts of this platform
-    for (const acc of platformAccounts) {
-      totalCount++;
-      let res;
-      if (platform === 'facebook') {
-        res = await publishToFacebook(acc, post);
-      } else if (platform === 'instagram') {
-        res = await publishToInstagram(acc, post);
-      } else if (platform === 'threads') {
-        res = await publishToThreads(acc, post);
-      }
-
-      results[`${platform}_${acc.id}`] = {
-        accountName: acc.name,
-        platform: platform,
-        ...res
-      };
-
-      if (res?.success) {
-        successCount++;
-      }
+    if (res?.success) {
+      successCount++;
     }
   }
 
-  // If at least one account published successfully, mark status as 'published'
+  // Final post status
   const finalStatus = successCount > 0 ? 'published' : 'failed';
   db.updatePost(postId, {
     status: finalStatus,
@@ -82,4 +69,3 @@ export async function executePostPublish(postId) {
     results
   };
 }
-

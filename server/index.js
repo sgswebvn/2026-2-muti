@@ -4,12 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { db } from './db.js';
-import { 
-  exchangeForLongLivedToken, 
-  getFacebookPages, 
-  getInstagramAccountForPage, 
-  getThreadsProfile 
-} from './services/accountService.js';
+import { exchangeForLongLivedToken, getFacebookPages } from './services/accountService.js';
 import { executePostPublish } from './services/postPublisher.js';
 import { initScheduler } from './services/scheduler.js';
 
@@ -27,6 +22,12 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Serve built frontend static files from 'dist' if present
+const DIST_DIR = path.resolve('dist');
+if (fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+}
+
 // Configure Multer for local media storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOADS_DIR),
@@ -35,16 +36,48 @@ const storage = multer.diskStorage({
     cb(null, `media_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`);
   }
 });
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB max file limit
+});
 
 // Initialize Scheduler Worker
 initScheduler();
 
-// ==================== API ROUTES ==================== //
+// ==================== SECURITY & AUTH API ==================== //
 
-// 1. Get / Save Meta App Settings (App ID & App Secret)
+// Verify PIN
+app.post('/api/auth/verify-pin', (req, res) => {
+  const { pin } = req.body;
+  const isValid = db.verifyPin(pin);
+  if (isValid) {
+    res.json({ success: true, message: 'Xác thực mã PIN thành công!' });
+  } else {
+    res.status(401).json({ success: false, error: 'Mã PIN bảo mật không chính xác!' });
+  }
+});
+
+// Change PIN
+app.post('/api/auth/change-pin', (req, res) => {
+  try {
+    const { currentPin, newPin } = req.body;
+    if (!db.verifyPin(currentPin)) {
+      return res.status(401).json({ success: false, error: 'Mã PIN hiện tại không chính xác!' });
+    }
+    db.updatePin(newPin);
+    res.json({ success: true, message: 'Đã đổi mã PIN bảo mật thành công!' });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// ==================== APP SETTINGS API ==================== //
+
 app.get('/api/settings', (req, res) => {
-  res.json({ success: true, settings: db.getSettings() });
+  const settings = db.getSettings();
+  // Don't expose securityPin directly in settings get
+  const { securityPin, ...safeSettings } = settings;
+  res.json({ success: true, settings: safeSettings });
 });
 
 app.post('/api/settings', (req, res) => {
@@ -53,59 +86,33 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings });
 });
 
-// 2. Connect Meta Access Token (Fetch Pages, IG, Threads & Convert Token)
+// ==================== FACEBOOK ACCOUNTS API ==================== //
+
 app.post('/api/accounts/connect', async (req, res) => {
   try {
-    const { token, type } = req.body; // type: 'facebook' | 'threads'
-    if (!token) {
-      return res.status(400).json({ success: false, error: 'Vui lòng cung cấp Access Token.' });
+    const { token } = req.body;
+    if (!token || !token.trim()) {
+      return res.status(400).json({ success: false, error: 'Vui lòng dán Access Token.' });
     }
 
     const settings = db.getSettings();
 
-    // 1. Try to convert short-lived token to long-lived (if App ID/Secret exist)
-    let tokenInfo = { accessToken: token, isLongLived: false };
+    let tokenInfo = { accessToken: token.trim(), isLongLived: false };
     if (settings.appId && settings.appSecret) {
       try {
-        tokenInfo = await exchangeForLongLivedToken(token, settings.appId, settings.appSecret);
+        tokenInfo = await exchangeForLongLivedToken(token.trim(), settings.appId, settings.appSecret);
       } catch (err) {
-        console.warn('Long lived token exchange warning:', err.message);
+        console.warn('Long-lived token exchange warning:', err.message);
       }
     }
 
     const userToken = tokenInfo.accessToken;
+    const pages = await getFacebookPages(userToken);
     const addedAccounts = [];
 
-    if (type === 'threads') {
-      // Connect Threads Account
-      const threadsProfile = await getThreadsProfile(userToken);
-      db.saveAccount(threadsProfile);
-      addedAccounts.push(threadsProfile);
-    } else {
-      // Connect Facebook Pages & linked Instagram accounts
-      const pages = await getFacebookPages(userToken);
-
-      for (const page of pages) {
-        // Save Page Account
-        db.saveAccount(page);
-        addedAccounts.push(page);
-
-        // Check for connected Instagram Business account
-        const igAcc = await getInstagramAccountForPage(page.id, page.accessToken);
-        if (igAcc) {
-          db.saveAccount(igAcc);
-          addedAccounts.push(igAcc);
-        }
-      }
-
-      // Also try threads check with same token
-      try {
-        const threadsProfile = await getThreadsProfile(userToken);
-        db.saveAccount(threadsProfile);
-        addedAccounts.push(threadsProfile);
-      } catch (e) {
-        // Threads token scope not included, skip silently
-      }
+    for (const page of pages) {
+      db.saveAccount(page);
+      addedAccounts.push(page);
     }
 
     res.json({
@@ -120,19 +127,18 @@ app.post('/api/accounts/connect', async (req, res) => {
   }
 });
 
-// 3. Get All Connected Accounts
 app.get('/api/accounts', (req, res) => {
   res.json({ success: true, accounts: db.getAccounts() });
 });
 
-// 4. Delete Account
 app.delete('/api/accounts/:platform/:id', (req, res) => {
   const { platform, id } = req.params;
   const accounts = db.deleteAccount(id, platform);
   res.json({ success: true, accounts });
 });
 
-// 5. Upload File (Video or Image)
+// ==================== MEDIA UPLOAD & POSTS API ==================== //
+
 app.post('/api/upload', upload.single('media'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: 'Không nhận được file.' });
@@ -152,26 +158,27 @@ app.post('/api/upload', upload.single('media'), (req, res) => {
   });
 });
 
-// 6. Posts Endpoints (Get, Create, Publish, Delete)
 app.get('/api/posts', (req, res) => {
   res.json({ success: true, posts: db.getPosts() });
 });
 
 app.post('/api/posts', async (req, res) => {
   try {
-    const { title, caption, hashtags, mediaUrl, mediaType, platforms, scheduledAt, publishNow } = req.body;
+    const { title, caption, hashtags, firstComment, mediaUrl, mediaType, postFormat, targetAccountIds, scheduledAt, publishNow } = req.body;
 
     const newPost = db.createPost({
       title,
       caption,
       hashtags,
+      firstComment,
       mediaUrl,
       mediaType,
-      platforms,
+      postFormat,
+      platforms: ['facebook'],
+      targetAccountIds: targetAccountIds || [],
       scheduledAt
     });
 
-    // If "Publish Now" selected, execute immediately
     if (publishNow) {
       executePostPublish(newPost.id).catch(err => console.error('Immediate Publish Error:', err));
     }
@@ -198,6 +205,13 @@ app.delete('/api/posts/:id', (req, res) => {
   res.json({ success: true, posts });
 });
 
+// Catch-all route to serve index.html for SPA if dist exists
+if (fs.existsSync(DIST_DIR)) {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
+}
+
 app.listen(PORT, () => {
-  console.log(`🚀 Meta Suite Backend Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Facebook Multi-Publisher All-in-One Server running on http://localhost:${PORT}`);
 });

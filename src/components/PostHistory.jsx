@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, CheckCircle2, AlertTriangle, ExternalLink, RefreshCw, Trash2, Send, Calendar } from 'lucide-react';
+import { Clock, CheckCircle2, AlertTriangle, ExternalLink, RefreshCw, Trash2, Send, Calendar, Facebook } from 'lucide-react';
 
 export default function PostHistory({ posts, fetchPosts }) {
   const [publishingId, setPublishingId] = useState(null);
@@ -35,7 +35,7 @@ export default function PostHistory({ posts, fetchPosts }) {
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <h2 style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Clock color="#1877f2" /> Lịch Sử & Lịch Đăng Tự Động ({posts.length})
+          <Facebook color="#1877f2" /> Lịch Sử Đăng Bài Fanpage ({posts.length})
         </h2>
 
         <button className="btn btn-secondary" onClick={fetchPosts} style={{ padding: '6px 14px', fontSize: '0.85rem' }}>
@@ -46,7 +46,7 @@ export default function PostHistory({ posts, fetchPosts }) {
       {posts.length === 0 ? (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
           <Calendar size={48} style={{ opacity: 0.3, marginBottom: '12px' }} />
-          <p>Chưa có bài đăng nào trong hệ thống. Hãy sang tab "Đăng Bài Nhanh" để tạo bài đăng đầu tiên!</p>
+          <p>Chưa có bài đăng nào. Hãy sang tab "Đăng Bài Fanpage" để tạo bài viết đầu tiên!</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -68,13 +68,13 @@ export default function PostHistory({ posts, fetchPosts }) {
                   <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
                     {post.mediaUrl ? (
                       post.mediaType === 'video' ? (
-                        <video src={post.mediaUrl} style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover', background: '#000' }} />
+                        <video src={post.mediaUrl} style={{ width: '84px', height: '84px', borderRadius: '12px', objectFit: 'cover', background: '#000' }} />
                       ) : (
-                        <img src={post.mediaUrl} alt="Thumbnail" style={{ width: '80px', height: '80px', borderRadius: '12px', objectFit: 'cover' }} />
+                        <img src={post.mediaUrl} alt="Thumbnail" style={{ width: '84px', height: '84px', borderRadius: '12px', objectFit: 'cover' }} />
                       )
                     ) : (
-                      <div style={{ width: '80px', height: '80px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                        Text Only
+                      <div style={{ width: '84px', height: '84px', borderRadius: '12px', background: 'rgba(24, 119, 242, 0.1)', border: '1px solid rgba(24, 119, 242, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem', color: '#60a5fa' }}>
+                        Văn bản
                       </div>
                     )}
 
@@ -93,34 +93,41 @@ export default function PostHistory({ posts, fetchPosts }) {
 
                         {post.scheduledAt && (
                           <span style={{ fontSize: '0.8rem', color: '#facc15', fontWeight: 600 }}>
-                            📅 Hẹn giờ đăng: {new Date(post.scheduledAt).toLocaleString('vi-VN')}
+                            📅 Hẹn giờ: {new Date(post.scheduledAt).toLocaleString('vi-VN')}
                           </span>
                         )}
                       </div>
 
                       {post.title && <h4 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '4px' }}>{post.title}</h4>}
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.4', marginBottom: '8px' }}>
-                        {post.caption?.substring(0, 140)}{post.caption?.length > 140 ? '...' : ''}
+                        {post.caption?.substring(0, 150)}{post.caption?.length > 150 ? '...' : ''}
                       </p>
 
-                      {/* Results Links Per Platform */}
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '10px' }}>
+                      {post.firstComment && (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                          💬 First comment: <i>"{post.firstComment}"</i>
+                        </div>
+                      )}
+
+                      {/* Results Links Per Facebook Page */}
+                      <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '10px' }}>
                         {Object.entries(results).map(([key, res]) => (
                           <div 
                             key={key} 
                             style={{ 
                               fontSize: '0.8rem', 
-                              padding: '4px 10px', 
+                              padding: '5px 12px', 
                               borderRadius: '8px', 
-                              background: res.success ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                              border: `1px solid ${res.success ? 'rgba(34, 197, 94, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`,
+                              background: res.success ? 'rgba(34, 197, 94, 0.12)' : 'rgba(239, 68, 68, 0.12)',
+                              border: `1px solid ${res.success ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
                               display: 'flex',
                               alignItems: 'center',
                               gap: '6px'
                             }}
                           >
+                            <Facebook size={14} color={res.success ? '#4ade80' : '#f87171'} />
                             <span style={{ fontWeight: 600, color: res.success ? '#4ade80' : '#f87171' }}>
-                              {res.platform?.toUpperCase()}:
+                              {res.accountName || 'Fanpage'}:
                             </span>
 
                             {res.success ? (
@@ -128,12 +135,12 @@ export default function PostHistory({ posts, fetchPosts }) {
                                 href={res.postUrl} 
                                 target="_blank" 
                                 rel="noreferrer" 
-                                style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
+                                style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none', fontWeight: 600 }}
                               >
-                                Xem bài đăng <ExternalLink size={12} />
+                                Xem Bài Viết <ExternalLink size={12} />
                               </a>
                             ) : (
-                              <span style={{ color: '#f87171' }}>{res.error || 'Thất bại'}</span>
+                              <span style={{ color: '#f87171' }}>{res.error || 'Lỗi'}</span>
                             )}
                           </div>
                         ))}
