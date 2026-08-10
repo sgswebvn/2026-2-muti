@@ -63,9 +63,9 @@ export default function ApiGuideModal({ isOpen, onClose }) {
             <ol style={{ paddingLeft: '24px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <li>Truy cập <a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noreferrer" style={{ color: '#60a5fa' }}>Meta Graph API Explorer <ExternalLink size={12} /></a>.</li>
               <li>Tại mục <b>User or Page</b>: Chọn <code>Get User Access Token</code>.</li>
-              <li>Tích chọn 3 quyền cần thiết:
+              <li>Tích chọn 4 quyền cần thiết (Bắt buộc tích <code>pages_manage_engagement</code> để tạo/trả lời bình luận):
                 <div style={{ background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '8px', margin: '8px 0', fontFamily: 'monospace', fontSize: '0.85rem', color: '#38bdf8' }}>
-                  pages_show_list, pages_read_engagement, pages_manage_posts
+                  pages_show_list, pages_read_engagement, pages_manage_posts, pages_manage_engagement
                 </div>
               </li>
               <li>Bấm <b>Generate Access Token</b> → Đăng nhập Facebook và cấp quyền.</li>
