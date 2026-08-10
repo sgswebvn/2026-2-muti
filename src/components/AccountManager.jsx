@@ -54,10 +54,8 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
-  const handleConnectToken = async (e) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-
+  // Connect Token Helper
+  const connectTokenToBackend = async (tokenStr) => {
     setLoading(true);
     setMessage(null);
 
@@ -69,7 +67,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       const res = await fetch('/api/accounts/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenInput.trim() })
+        body: JSON.stringify({ token: tokenStr.trim() })
       });
 
       const data = await res.json();
@@ -88,6 +86,57 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       setMessage({ type: 'error', text: err.message });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConnectToken = (e) => {
+    e.preventDefault();
+    if (!tokenInput.trim()) return;
+    connectTokenToBackend(tokenInput);
+  };
+
+  // FB SDK Dynamic Loader & OAuth Login
+  const handleFbOAuthLogin = () => {
+    setLoading(true);
+    setMessage(null);
+
+    const targetAppId = appId.trim() || '1062583589573156';
+
+    const initAndLogin = () => {
+      if (!window.FB) {
+        setLoading(false);
+        setMessage({ type: 'error', text: 'Không thể tải SDK Facebook. Vui lòng kiểm tra kết nối mạng.' });
+        return;
+      }
+
+      window.FB.init({
+        appId: targetAppId,
+        cookie: true,
+        xfbml: true,
+        version: 'v20.0'
+      });
+
+      window.FB.login((response) => {
+        if (response.authResponse && response.authResponse.accessToken) {
+          connectTokenToBackend(response.authResponse.accessToken);
+        } else {
+          setLoading(false);
+          setMessage({ type: 'error', text: 'Đăng nhập Facebook bị hủy hoặc không thành công.' });
+        }
+      }, { scope: 'pages_show_list,pages_manage_posts,pages_read_engagement' });
+    };
+
+    if (window.FB) {
+      initAndLogin();
+    } else {
+      window.fbAsyncInit = initAndLogin;
+      (function(d, s, id) {
+        var js, fjs = d.getElementsByTagName(s)[0];
+        if (d.getElementById(id)) return;
+        js = d.createElement(s); js.id = id;
+        js.src = "https://connect.facebook.net/en_US/sdk.js";
+        fjs.parentNode.insertBefore(js, fjs);
+      }(document, 'script', 'facebook-jssdk'));
     }
   };
 
@@ -196,30 +245,56 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
         </div>
       )}
 
-      {/* Grid: App Credentials & Token Connector */}
+      {/* Grid: OAuth Login & Manual Token Connector */}
       <div className="grid-2">
-        {/* 1. Token Input Form */}
+        {/* 1. Facebook OAuth 2.0 & Token Input Form */}
         <div className="glass-card" style={{ padding: '24px' }}>
           <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', fontWeight: 700 }}>
-            Kết Nối Access Token Fanpage
+            Kết Nối Tài Khoản Facebook & Fanpages
           </h3>
 
-          <form onSubmit={handleConnectToken}>
-            <div className="form-group">
-              <label className="form-label">Access Token (Dán token từ Graph API Explorer)</label>
-              <textarea
-                className="textarea-field"
-                style={{ minHeight: '100px', fontSize: '0.85rem', fontFamily: 'monospace' }}
-                placeholder="Dán mã EAAPGagVmkiQ..."
-                value={tokenInput}
-                onChange={(e) => setTokenInput(e.target.value)}
-              />
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
-              {loading ? 'Đang quét Fanpage...' : 'Kết Nối & Quét Danh Sách Fanpage'}
+          {/* Facebook OAuth Button */}
+          <div style={{ marginBottom: '20px' }}>
+            <button
+              type="button"
+              className="btn"
+              style={{
+                width: '100%',
+                padding: '12px',
+                background: '#1877f2',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                borderRadius: '8px'
+              }}
+              onClick={handleFbOAuthLogin}
+              disabled={loading}
+            >
+              {loading ? 'Đang Xử Lý Kết Nối Facebook...' : 'Đăng Nhập Bằng Facebook (Cách 2)'}
             </button>
-          </form>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>
+              Bấm nút trên để đăng nhập tài khoản Facebook thường và kết nối tự động toàn bộ Fanpage.
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px solid #334155', paddingTop: '16px' }}>
+            <form onSubmit={handleConnectToken}>
+              <div className="form-group">
+                <label className="form-label">Hoặc dán Access Token thủ công (Dành cho Dev)</label>
+                <textarea
+                  className="textarea-field"
+                  style={{ minHeight: '80px', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                  placeholder="Dán mã EAAPGagVmkiQ..."
+                  value={tokenInput}
+                  onChange={(e) => setTokenInput(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-secondary" style={{ width: '100%', padding: '10px' }} disabled={loading}>
+                {loading ? 'Đang quét...' : 'Kết Nối Bằng Access Token'}
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* 2. Meta App & OpenAI Credentials */}
