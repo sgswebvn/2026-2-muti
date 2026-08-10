@@ -25,6 +25,16 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
 
   useEffect(() => {
     fetchSettings();
+
+    // Auto-detect Facebook OAuth redirect token from URL hash (#access_token=...)
+    if (window.location.hash && window.location.hash.includes('access_token=')) {
+      const params = new URLSearchParams(window.location.hash.substring(1));
+      const accessToken = params.get('access_token');
+      if (accessToken) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        connectTokenToBackend(accessToken);
+      }
+    }
   }, []);
 
   const fetchSettings = async () => {
@@ -95,49 +105,19 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     connectTokenToBackend(tokenInput);
   };
 
-  // FB SDK Dynamic Loader & OAuth Login
+  // Direct OAuth 2.0 Redirect Login Flow
   const handleFbOAuthLogin = () => {
     setLoading(true);
     setMessage(null);
 
     const targetAppId = appId.trim() || '1062583589573156';
+    const redirectUri = window.location.origin + '/';
+    const scope = 'pages_show_list,pages_manage_posts,pages_read_engagement';
 
-    const initAndLogin = () => {
-      if (!window.FB) {
-        setLoading(false);
-        setMessage({ type: 'error', text: 'Không thể tải SDK Facebook. Vui lòng kiểm tra kết nối mạng.' });
-        return;
-      }
+    // Build direct Facebook OAuth URL
+    const oauthUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${targetAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
 
-      window.FB.init({
-        appId: targetAppId,
-        cookie: true,
-        xfbml: true,
-        version: 'v20.0'
-      });
-
-      window.FB.login((response) => {
-        if (response.authResponse && response.authResponse.accessToken) {
-          connectTokenToBackend(response.authResponse.accessToken);
-        } else {
-          setLoading(false);
-          setMessage({ type: 'error', text: 'Đăng nhập Facebook bị hủy hoặc không thành công.' });
-        }
-      }, { scope: 'pages_show_list,pages_manage_posts,pages_read_engagement' });
-    };
-
-    if (window.FB) {
-      initAndLogin();
-    } else {
-      window.fbAsyncInit = initAndLogin;
-      (function(d, s, id) {
-        var js, fjs = d.getElementsByTagName(s)[0];
-        if (d.getElementById(id)) return;
-        js = d.createElement(s); js.id = id;
-        js.src = "https://connect.facebook.net/en_US/sdk.js";
-        fjs.parentNode.insertBefore(js, fjs);
-      }(document, 'script', 'facebook-jssdk'));
-    }
+    window.location.href = oauthUrl;
   };
 
   const handleCheckTokens = async () => {
@@ -253,7 +233,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
             Kết Nối Tài Khoản Facebook & Fanpages
           </h3>
 
-          {/* Facebook OAuth Button */}
+          {/* Facebook OAuth Direct Button */}
           <div style={{ marginBottom: '20px' }}>
             <button
               type="button"
@@ -270,7 +250,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
               onClick={handleFbOAuthLogin}
               disabled={loading}
             >
-              {loading ? 'Đang Xử Lý Kết Nối Facebook...' : 'Đăng Nhập Bằng Facebook (Cách 2)'}
+              {loading ? 'Đang Kết Nối Facebook...' : 'Đăng Nhập Bằng Facebook (Cách 2)'}
             </button>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>
               Bấm nút trên để đăng nhập tài khoản Facebook thường và kết nối tự động toàn bộ Fanpage.
