@@ -13,6 +13,10 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
 
+  // Selected accounts for bulk group assignment
+  const [selectedAccIds, setSelectedAccIds] = useState([]);
+  const [bulkGroupName, setBulkGroupName] = useState('');
+
   // Role invite modal state
   const [selectedPageForRole, setSelectedPageForRole] = useState(null);
   const [userEmailOrId, setUserEmailOrId] = useState('');
@@ -22,9 +26,6 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
   // Group editing modal state
   const [editingGroupAcc, setEditingGroupAcc] = useState(null);
   const [groupInput, setGroupInput] = useState('');
-  
-  // Custom Topic Group creation input
-  const [newTopicGroup, setNewTopicGroup] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -127,6 +128,43 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       }
     } catch (err) {
       alert('Không thể cập nhật nhóm Fanpage.');
+    }
+  };
+
+  // Bulk Group Assignment
+  const handleBulkAssignGroup = async (e) => {
+    e.preventDefault();
+    if (selectedAccIds.length === 0) {
+      alert('Vui lòng tích chọn ít nhất 1 Fanpage bên dưới để gán nhóm.');
+      return;
+    }
+    if (!bulkGroupName.trim()) {
+      alert('Vui lòng nhập tên nhóm mới.');
+      return;
+    }
+
+    try {
+      for (const accId of selectedAccIds) {
+        await fetch(`/api/accounts/facebook/${accId}/group`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ group: bulkGroupName.trim() })
+        });
+      }
+      fetchAccounts();
+      setSelectedAccIds([]);
+      setBulkGroupName('');
+      setMessage({ type: 'success', text: `Đã tạo nhóm "${bulkGroupName.trim()}" và gán thành công cho ${selectedAccIds.length} Fanpage!` });
+    } catch (err) {
+      alert('Không thể gán nhóm hàng loạt.');
+    }
+  };
+
+  const toggleAccSelection = (id) => {
+    if (selectedAccIds.includes(id)) {
+      setSelectedAccIds(selectedAccIds.filter(i => i !== id));
+    } else {
+      setSelectedAccIds([...selectedAccIds, id]);
     }
   };
 
@@ -317,6 +355,39 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
           </div>
         </div>
 
+        {/* BULK CREATE & ASSIGN GROUP BAR */}
+        <form 
+          onSubmit={handleBulkAssignGroup}
+          style={{ 
+            background: '#0f172a', 
+            padding: '12px 16px', 
+            borderRadius: '8px', 
+            border: '1px solid #334155',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            flexWrap: 'wrap'
+          }}
+        >
+          <div style={{ fontSize: '0.85rem', fontWeight: 600, minWidth: '160px' }}>
+            Tạo Nhóm Mới ({selectedAccIds.length} Trang được chọn):
+          </div>
+
+          <input 
+            type="text" 
+            className="input-field" 
+            placeholder="Nhập tên nhóm mới (VD: Bán Hàng, Thời Trang, Bất Động Sản)..."
+            value={bulkGroupName}
+            onChange={(e) => setBulkGroupName(e.target.value)}
+            style={{ flex: 1, minWidth: '220px', fontSize: '0.85rem', padding: '6px 12px' }}
+          />
+
+          <button type="submit" className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '6px 14px' }}>
+            + Tạo & Gán Nhóm Cho Các Trang Đã Chọn
+          </button>
+        </form>
+
         {filteredAccounts.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <p>Không tìm thấy Fanpage nào phù hợp với bộ lọc.</p>
@@ -326,6 +397,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
             {filteredAccounts.map((acc) => {
               const isInvalid = acc.tokenStatus === 'invalid' || acc.tokenStatus === 'expired';
               const currentGroup = acc.group || 'Mặc định';
+              const isChecked = selectedAccIds.includes(acc.id);
 
               return (
                 <div 
@@ -337,16 +409,23 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                     flexDirection: 'column',
                     justifyContent: 'space-between',
                     gap: '12px',
-                    background: '#0f172a',
-                    border: '1px solid #334155'
+                    background: isChecked ? 'rgba(37, 99, 235, 0.15)' : '#0f172a',
+                    border: isChecked ? '2px solid #2563eb' : '1px solid #334155'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isChecked}
+                      onChange={() => toggleAccSelection(acc.id)}
+                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                    />
+
                     {acc.avatar ? (
                       <img 
                         src={acc.avatar} 
                         alt={acc.name} 
-                        style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} 
+                        style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} 
                       />
                     ) : (
                       <div className="avatar-placeholder">{acc.name.substring(0, 2).toUpperCase()}</div>
@@ -360,7 +439,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                       </div>
 
                       <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
-                        {/* Group Tag Badge */}
+                        {/* Group Tag Badge - Click to edit */}
                         <span 
                           onClick={() => {
                             setEditingGroupAcc(acc);
@@ -375,9 +454,9 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                             fontWeight: 600,
                             cursor: 'pointer' 
                           }}
-                          title="Bấm để đổi nhóm"
+                          title="Bấm vào để đổi nhóm cho trang này"
                         >
-                          Nhóm: {currentGroup}
+                          Nhóm: {currentGroup} ✎
                         </span>
 
                         {isInvalid ? (
@@ -428,15 +507,15 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                 className="input-field" 
                 value={groupInput}
                 onChange={(e) => setGroupInput(e.target.value)}
-                placeholder="Nhập hoặc chọn tên nhóm chủ đề..."
+                placeholder="Nhập tên nhóm mới (VD: Nhóm VIP, Mỹ Phẩm)..."
               />
             </div>
 
             {/* Quick Suggestions */}
             <div style={{ marginBottom: '16px' }}>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>Gợi ý chủ đề nhanh:</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>Gợi ý tên nhóm:</div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {['Thời Trang', 'Bất Động Sản', 'Ẩm Thực', 'Công Nghệ', 'Mỹ Phẩm', 'Bán Hàng'].map(topic => (
+                {['Thời Trang', 'Bất Động Sản', 'Ẩm Thực', 'Công Nghệ', 'Mỹ Phẩm', 'Bán Hàng', 'Dự Án HN'].map(topic => (
                   <button
                     key={topic}
                     type="button"
