@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "node server/index.js",
-    "build": "npx vite build",
-    "preview": "npx vite preview",
+    "build": "node node_modules/vite/bin/vite.js build",
+    "preview": "node node_modules/vite/bin/vite.js preview",
     "server": "node server/index.js",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "postinstall": "chmod -R 777 node_modules/.bin || true"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.1",
