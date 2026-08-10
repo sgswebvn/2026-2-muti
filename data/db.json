@@ -2,10 +2,35 @@
   "settings": {
     "appId": "1062583589573156",
     "appSecret": "3e270e4e623e1d2ac851dd3fccbc97bc",
-    "updatedAt": "2026-08-10T05:57:12.481Z",
+    "updatedAt": "2026-08-10T06:14:29.263Z",
     "openaiApiKey": ""
   },
-  "accounts": [],
+  "accounts": [
+    {
+      "group": "Mặc định",
+      "id": "726155563894891",
+      "name": "Đồ Án Tốt Nghiệp",
+      "category": "Công ty công nghệ thông tin",
+      "accessToken": "EAAPGagVmkiQBSN4Kp87mq7fy0k3dIKERcbeV48fv4ZC8AYsHidPUs4W1ysKZCs80ROSxVZAYVZByQP5ujafllDWZCiZBWVuEjIRbMqr4rrUCoHDmniiOV0BoAcnHk9uBnxguq1ZAoQFFxp5ZAlr6gGYlRhjmE8nPWBCB8yamq6WmkOnKHilWo3N4X9Jo5hK4ex0QYIv3N6NX",
+      "avatar": "https://scontent.fsgn2-7.fna.fbcdn.net/v/t39.30808-1/769010535_122182985108928077_8280088354325445407_n.jpg?stp=c113.0.452.452a_dst-jpg_s200x200_tt6&_nc_cat=108&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGEVNAXWyzwQQZbzI4mmLIAP8mFOXbaND0_yYU5dto0PT69yOBlSpuDpgjQP3n4Uo1mQ9lva-2CGAiqtP13csy_&_nc_ohc=LaYd3t6y0qQQ7kNvwGUy1_D&_nc_oc=AdrVDzaEp1J9mPfEWOPsTahx5T8LRGosNiuuXFSjJCDEkhwzrJBT_ehJVV9qhI4LZLg&_nc_zt=24&_nc_ht=scontent.fsgn2-7.fna&edm=AGaHXAAEAAAA&_nc_gid=-iE9xMh9Byko6-jHKwpf2A&_nc_tpa=Q5bMBQLD082Gahras-onogr9XeFnEIwyLgmeJ0ygvOGXlfQWuI84owUAEaRWJ1JybcLeit5lZavwfbg0mA&oh=00_AQHCLNDnfmtIbbhyIw5RvUoU42z9xpY2lsAxU6T2xdSDkg&oe=6A7F4EAD",
+      "platform": "facebook",
+      "tokenStatus": "active",
+      "lastCheckedAt": "2026-08-10T06:14:30.158Z",
+      "createdAt": "2026-08-10T06:14:30.158Z"
+    },
+    {
+      "group": "Mặc định",
+      "id": "535269419675887",
+      "name": "Devprogenz2",
+      "category": "Công ty công nghệ thông tin",
+      "accessToken": "EAAPGagVmkiQBSEuRIYFszA3c1PH03Xvored8PegtrO4tfH6a1he6heBNxaiuRGQLpPZANLUMQt8r6dynOiZBsIq3PhwVAdfe0qFWJpRBnjzc5mU9PsEMmx2IqH8qxAZAjOvEYtZBB7j8BEMp8R4ZBLCVu9pfQZCiNwT09miH9d25Nk6f5ylUPOHyZC3VEny3NBuePWVsci7",
+      "avatar": "https://scontent.fsgn2-9.fna.fbcdn.net/v/t39.30808-1/480493993_122111840240754602_4648667244334510483_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=106&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGrmfmfguZX8YL18Ef-QkgM_MynTJL4dln8zKdMkvh2WbdaGIVxDV1h5HkD3KShUf2o_U-NyBf2_OLp-RrKNpio&_nc_ohc=ll5MDbjfnwcQ7kNvwHfAqly&_nc_oc=Adp0ixBj9awtuPQnafyNlZhdr_7hR1bzhqhuA2hl916ZmZKC9AMUUauWCWLw-XBHEeU&_nc_zt=24&_nc_ht=scontent.fsgn2-9.fna&edm=AGaHXAAEAAAA&_nc_gid=-iE9xMh9Byko6-jHKwpf2A&_nc_tpa=Q5bMBQJ_jX6P7t9Q1X1CHegqRZ32xIYFsMylviK7kUmkGxNGbjnXsKvGQBPtLDoaFJRF9s7mvgttwz9zyg&oh=00_AQHkkj-P1w8AW_FH71V0O8YJ0_DcgVDyM2IEJbEheCjnFQ&oe=6A7F3DAD",
+      "platform": "facebook",
+      "tokenStatus": "active",
+      "lastCheckedAt": "2026-08-10T06:14:30.159Z",
+      "createdAt": "2026-08-10T06:14:30.159Z"
+    }
+  ],
   "posts": [],
   "logs": []
 }

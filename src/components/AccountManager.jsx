@@ -19,9 +19,12 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
   const [roleInput, setRoleInput] = useState('CREATE_CONTENT');
   const [invitingRole, setInvitingRole] = useState(false);
 
-  // Group editing state
+  // Group editing modal state
   const [editingGroupAcc, setEditingGroupAcc] = useState(null);
   const [groupInput, setGroupInput] = useState('');
+  
+  // Custom Topic Group creation input
+  const [newTopicGroup, setNewTopicGroup] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -115,7 +118,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       const res = await fetch(`/api/accounts/facebook/${accId}/group`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ group: newGroup })
+        body: JSON.stringify({ group: newGroup.trim() || 'Mặc định' })
       });
       const data = await res.json();
       if (data.success) {
@@ -367,9 +370,9 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                             fontSize: '0.7rem', 
                             padding: '2px 8px', 
                             borderRadius: '4px', 
-                            background: '#334155', 
-                            color: '#94a3b8', 
-                            border: '1px solid #475569',
+                            background: '#2563eb', 
+                            color: '#ffffff', 
+                            fontWeight: 600,
                             cursor: 'pointer' 
                           }}
                           title="Bấm để đổi nhóm"
@@ -380,7 +383,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                         {isInvalid ? (
                           <span style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 600 }}>Lỗi Token</span>
                         ) : (
-                          <span style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 600 }}>Token Hoạt Động</span>
+                          <span style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 600 }}>Hoạt Động</span>
                         )}
                       </div>
                     </div>
@@ -410,23 +413,43 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
         )}
       </div>
 
-      {/* EDIT GROUP MODAL */}
+      {/* EDIT GROUP MODAL WITH QUICK TOPIC SUGGESTIONS */}
       {editingGroupAcc && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '20px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '440px', padding: '20px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
-              Phân Nhóm Cho Fanpage: {editingGroupAcc.name}
+              Gán Nhóm Cho Fanpage: {editingGroupAcc.name}
             </h3>
-            <div className="form-group" style={{ marginBottom: '16px' }}>
-              <label className="form-label">Tên Nhóm (VD: Bán Hàng, Bất Động Sản, Thời Trang)</label>
+            
+            <div className="form-group" style={{ marginBottom: '12px' }}>
+              <label className="form-label">Tên Nhóm Chủ Đề</label>
               <input 
                 type="text" 
                 className="input-field" 
                 value={groupInput}
                 onChange={(e) => setGroupInput(e.target.value)}
-                placeholder="Nhập tên nhóm..."
+                placeholder="Nhập hoặc chọn tên nhóm chủ đề..."
               />
             </div>
+
+            {/* Quick Suggestions */}
+            <div style={{ marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: '6px' }}>Gợi ý chủ đề nhanh:</div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {['Thời Trang', 'Bất Động Sản', 'Ẩm Thực', 'Công Nghệ', 'Mỹ Phẩm', 'Bán Hàng'].map(topic => (
+                  <button
+                    key={topic}
+                    type="button"
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.75rem', padding: '3px 8px' }}
+                    onClick={() => setGroupInput(topic)}
+                  >
+                    + {topic}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setEditingGroupAcc(null)}>Hủy</button>
               <button className="btn btn-primary" onClick={() => handleSaveAccountGroup(editingGroupAcc.id, groupInput)}>Lưu Nhóm</button>

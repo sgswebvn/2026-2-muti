@@ -14,8 +14,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
   const [uploading, setUploading] = useState(false);
 
   const [selectedPageIds, setSelectedPageIds] = useState([]);
-  const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
-  const [searchPageQuery, setSearchPageQuery] = useState('');
+  const [activeGroupTab, setActiveGroupTab] = useState('ALL');
 
   const [postMode, setPostMode] = useState('now'); // 'now' | 'schedule'
   const [scheduledAt, setScheduledAt] = useState('');
@@ -44,15 +43,8 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     }
   }, [draftFromAi]);
 
-  // Unique groups
+  // Unique groups list
   const groupsList = Array.from(new Set(fbAccounts.map(a => a.group || 'Mặc định')));
-
-  // Filtered accounts in publisher
-  const filteredFbAccounts = fbAccounts.filter(acc => {
-    const matchesSearch = acc.name.toLowerCase().includes(searchPageQuery.toLowerCase());
-    const matchesGroup = selectedGroupFilter === 'ALL' || (acc.group || 'Mặc định') === selectedGroupFilter;
-    return matchesSearch && matchesGroup;
-  });
 
   const togglePageSelection = (pageId) => {
     if (selectedPageIds.includes(pageId)) {
@@ -62,15 +54,24 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     }
   };
 
-  const toggleSelectAllFilteredPages = () => {
-    const filteredIds = filteredFbAccounts.map(a => a.id);
-    const allSelected = filteredIds.every(id => selectedPageIds.includes(id));
-
-    if (allSelected) {
-      setSelectedPageIds(selectedPageIds.filter(id => !filteredIds.includes(id)));
+  // Select all pages belonging to a specific group
+  const selectPagesByGroup = (groupName) => {
+    setActiveGroupTab(groupName);
+    if (groupName === 'ALL') {
+      setSelectedPageIds(fbAccounts.map(a => a.id));
     } else {
-      const merged = Array.from(new Set([...selectedPageIds, ...filteredIds]));
-      setSelectedPageIds(merged);
+      const groupPageIds = fbAccounts
+        .filter(a => (a.group || 'Mặc định') === groupName)
+        .map(a => a.id);
+      setSelectedPageIds(groupPageIds);
+    }
+  };
+
+  const selectAllPages = () => {
+    if (selectedPageIds.length === fbAccounts.length) {
+      setSelectedPageIds([]);
+    } else {
+      setSelectedPageIds(fbAccounts.map(a => a.id));
     }
   };
 
@@ -176,7 +177,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
       {/* LEFT: Clean Form */}
       <div className="glass-card" style={{ padding: '24px' }}>
         <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '16px' }}>
-          Soạn Bài Đăng Fanpage Facebook
+          Soạn Bài Đăng Fanpage
         </h2>
 
         {notice && (
@@ -186,9 +187,120 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         )}
 
         <form onSubmit={handleSubmit}>
+          {/* SECTION 1: FANPAGE SELECTION AT THE VERY TOP (VISUAL & INTUITIVE) */}
+          <div 
+            style={{ 
+              background: '#0f172a', 
+              padding: '16px', 
+              borderRadius: '10px', 
+              border: '1px solid #334155',
+              marginBottom: '20px' 
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+              <div>
+                <span className="form-label" style={{ fontSize: '0.95rem', fontWeight: 700 }}>
+                  Chọn Fanpage Đăng Bài
+                </span>
+                <span style={{ fontSize: '0.8rem', color: '#60a5fa', marginLeft: '8px', fontWeight: 600 }}>
+                  (Đã chọn {selectedPageIds.length}/{fbAccounts.length})
+                </span>
+              </div>
+
+              <button 
+                type="button" 
+                className="btn btn-secondary" 
+                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                onClick={selectAllPages}
+              >
+                {selectedPageIds.length === fbAccounts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+              </button>
+            </div>
+
+            {/* Quick Group Tabs (Chọn Theo Nhóm Chủ Đề) */}
+            {groupsList.length > 0 && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <button
+                  type="button"
+                  className={`btn ${activeGroupTab === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ padding: '4px 12px', fontSize: '0.785rem' }}
+                  onClick={() => selectPagesByGroup('ALL')}
+                >
+                  Tất cả nhóm
+                </button>
+                {groupsList.map(grp => (
+                  <button
+                    key={grp}
+                    type="button"
+                    className={`btn ${activeGroupTab === grp ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ padding: '4px 12px', fontSize: '0.785rem' }}
+                    onClick={() => selectPagesByGroup(grp)}
+                  >
+                    Nhóm: {grp}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Visual Fanpage Cards Grid */}
+            {fbAccounts.length === 0 ? (
+              <div style={{ fontSize: '0.85rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '6px' }}>
+                Chưa có Fanpage nào kết nối. Hãy sang tab Fanpage & Roles để kết nối tài khoản.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '160px', overflowY: 'auto' }}>
+                {fbAccounts.map(acc => {
+                  const isSelected = selectedPageIds.includes(acc.id);
+                  return (
+                    <div
+                      key={acc.id}
+                      onClick={() => togglePageSelection(acc.id)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: '8px',
+                        background: isSelected ? 'rgba(37, 99, 235, 0.2)' : '#1e293b',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #334155',
+                        color: isSelected ? '#ffffff' : 'var(--text-muted)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <input 
+                        type="checkbox" 
+                        checked={isSelected}
+                        onChange={() => {}} // Handled by parent div onClick
+                        style={{ cursor: 'pointer' }}
+                      />
+                      {acc.avatar ? (
+                        <img src={acc.avatar} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700 }}>
+                          f
+                        </div>
+                      )}
+                      <div style={{ overflow: 'hidden' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.825rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {acc.name}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
+                          {acc.group || 'Mặc định'}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 2: CLEAN POST CONTENT FIELDS */}
+
           {/* Title */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
-            <label className="form-label">Tiêu Đề Bài Viết (Tùy chọn - Sẽ đứng ở đầu nội dung bài đăng)</label>
+            <label className="form-label">Tiêu Đề</label>
             <input 
               type="text" 
               className="input-field"
@@ -200,7 +312,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
 
           {/* Caption Textarea */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
-            <label className="form-label">Nội Dung Bài Đăng (Caption) (*)</label>
+            <label className="form-label">Nội Dung Bài Viết</label>
             <textarea 
               className="input-field" 
               rows={6}
@@ -236,9 +348,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             </div>
           </div>
 
-          {/* Multiple Image Upload */}
+          {/* Multiple Image / Video Upload */}
           <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label">Hình Ảnh / Video (Có thể chọn nhiều file)</label>
+            <label className="form-label">Hình Ảnh / Video</label>
 
             <div 
               style={{
@@ -279,7 +391,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                       border: '1px solid #334155' 
                     }}
                   >
-                    {mediaType === 'video' ? (
+                    {mediaType === 'video' || /\.(mp4|mov|webm|avi|m4v)$/i.test(url) ? (
                       <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
                       <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -309,73 +421,6 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                     </button>
                   </div>
                 ))}
-              </div>
-            )}
-          </div>
-
-          {/* Select Target Fanpages with Grouping */}
-          <div className="form-group" style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-              <label className="form-label" style={{ marginBottom: 0 }}>
-                Chọn Fanpage Đăng Bài ({selectedPageIds.length}/{fbAccounts.length})
-              </label>
-
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {/* Group Selector */}
-                <select 
-                  className="input-field" 
-                  value={selectedGroupFilter} 
-                  onChange={(e) => setSelectedGroupFilter(e.target.value)}
-                  style={{ padding: '2px 8px', fontSize: '0.75rem', width: 'auto' }}
-                >
-                  <option value="ALL">Tất cả nhóm</option>
-                  {groupsList.map(grp => (
-                    <option key={grp} value={grp}>Nhóm: {grp}</option>
-                  ))}
-                </select>
-
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  style={{ fontSize: '0.75rem', padding: '2px 8px' }}
-                  onClick={toggleSelectAllFilteredPages}
-                >
-                  Chọn nhóm này
-                </button>
-              </div>
-            </div>
-
-            {fbAccounts.length === 0 ? (
-              <div style={{ fontSize: '0.85rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '6px' }}>
-                Chưa có Fanpage nào kết nối. Hãy sang tab Fanpage & Roles để kết nối tài khoản.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '120px', overflowY: 'auto' }}>
-                {filteredFbAccounts.map(acc => {
-                  const isSelected = selectedPageIds.includes(acc.id);
-                  return (
-                    <div
-                      key={acc.id}
-                      onClick={() => togglePageSelection(acc.id)}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: '6px',
-                        background: isSelected ? 'rgba(37, 99, 235, 0.25)' : '#0f172a',
-                        border: isSelected ? '1px solid #2563eb' : '1px solid #334155',
-                        color: isSelected ? '#60a5fa' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: '0.8rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                    >
-                      {acc.avatar && <img src={acc.avatar} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />}
-                      <span>{acc.name}</span>
-                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({acc.group || 'Mặc định'})</span>
-                    </div>
-                  );
-                })}
               </div>
             )}
           </div>
@@ -426,7 +471,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
       {/* RIGHT: Live Preview */}
       <div className="glass-card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '14px' }}>
-          Xem Trước Giao Diện Bài Đăng (Live Preview)
+          Xem Trước Giao Diện Bài Đăng
         </h3>
 
         <div 
