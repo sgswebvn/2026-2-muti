@@ -1,37 +1,58 @@
-import React, { useState, useRef } from 'react';
-import { 
-  Upload, Image, Film, Send, Calendar, Facebook, 
-  Sparkles, CheckCircle, AlertCircle, X, Eye, Hash, MessageSquare, CheckSquare, Square,
-  Bold, Italic, Type, Smile, Sparkle
-} from 'lucide-react';
-import { convertToUnicodeFont } from '../utils/unicodeFont';
+import React, { useState, useEffect } from 'react';
 
-export default function PostPublisher({ accounts, onPostCreated }) {
+export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromAi, onPostCreated }) {
   const fbAccounts = accounts.filter(a => a.platform === 'facebook');
-  
+
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
-  const [hashtags, setHashtags] = useState('#facebook #viral #reels');
+  const [hashtags, setHashtags] = useState('#facebook #viral');
   const [firstComment, setFirstComment] = useState('');
-  const [mediaFile, setMediaFile] = useState(null);
-  const [mediaUrl, setMediaUrl] = useState('');
+  
+  // Media state: supports single or multiple uploaded image/video URLs
+  const [mediaUrls, setMediaUrls] = useState([]);
   const [mediaType, setMediaType] = useState('image'); // 'image' | 'video'
   const [uploading, setUploading] = useState(false);
-  
+
   const [selectedPageIds, setSelectedPageIds] = useState([]);
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
+  const [searchPageQuery, setSearchPageQuery] = useState('');
+
   const [postMode, setPostMode] = useState('now'); // 'now' | 'schedule'
   const [scheduledAt, setScheduledAt] = useState('');
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  const captionRef = useRef(null);
-
   // Initialize selectedPageIds when fbAccounts change
-  React.useEffect(() => {
+  useEffect(() => {
     if (fbAccounts.length > 0 && selectedPageIds.length === 0) {
       setSelectedPageIds(fbAccounts.map(a => a.id));
     }
   }, [accounts]);
+
+  // Auto-populate when draftFromAi is passed
+  useEffect(() => {
+    if (draftFromAi) {
+      if (draftFromAi.title) setTitle(draftFromAi.title);
+      if (draftFromAi.caption) setCaption(draftFromAi.caption);
+      if (draftFromAi.hashtags) setHashtags(draftFromAi.hashtags);
+      if (draftFromAi.firstComment) setFirstComment(draftFromAi.firstComment);
+      if (draftFromAi.mediaUrls && draftFromAi.mediaUrls.length > 0) {
+        setMediaUrls(draftFromAi.mediaUrls);
+      }
+      setNotice({ type: 'success', text: 'Đã điền nội dung từ ChatGPT vào bài đăng. Bạn có thể kiểm tra lại trước khi bấm Đăng.' });
+      if (onClearDraftFromAi) onClearDraftFromAi();
+    }
+  }, [draftFromAi]);
+
+  // Unique groups
+  const groupsList = Array.from(new Set(fbAccounts.map(a => a.group || 'Mặc định')));
+
+  // Filtered accounts in publisher
+  const filteredFbAccounts = fbAccounts.filter(acc => {
+    const matchesSearch = acc.name.toLowerCase().includes(searchPageQuery.toLowerCase());
+    const matchesGroup = selectedGroupFilter === 'ALL' || (acc.group || 'Mặc định') === selectedGroupFilter;
+    return matchesSearch && matchesGroup;
+  });
 
   const togglePageSelection = (pageId) => {
     if (selectedPageIds.includes(pageId)) {
@@ -41,67 +62,28 @@ export default function PostPublisher({ accounts, onPostCreated }) {
     }
   };
 
-  const toggleSelectAllPages = () => {
-    if (selectedPageIds.length === fbAccounts.length) {
-      setSelectedPageIds([]);
+  const toggleSelectAllFilteredPages = () => {
+    const filteredIds = filteredFbAccounts.map(a => a.id);
+    const allSelected = filteredIds.every(id => selectedPageIds.includes(id));
+
+    if (allSelected) {
+      setSelectedPageIds(selectedPageIds.filter(id => !filteredIds.includes(id)));
     } else {
-      setSelectedPageIds(fbAccounts.map(a => a.id));
+      const merged = Array.from(new Set([...selectedPageIds, ...filteredIds]));
+      setSelectedPageIds(merged);
     }
   };
 
-  // Apply Unicode Font Style to selected text in caption textarea
-  const applyFontStyle = (style) => {
-    const textarea = captionRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    
-    if (start === end) {
-      alert('Vui lòng bôi đen (chọn) đoạn văn bản cần đổi phông chữ!');
-      return;
-    }
-
-    const selectedText = caption.substring(start, end);
-    const converted = convertToUnicodeFont(selectedText, style);
-    const newCaption = caption.substring(0, start) + converted + caption.substring(end);
-    
-    setCaption(newCaption);
-
-    // Reset focus and selection
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start, start + converted.length);
-    }, 50);
-  };
-
-  // Insert Emoji at cursor
-  const insertEmoji = (emoji) => {
-    const textarea = captionRef.current;
-    if (!textarea) {
-      setCaption(prev => prev + emoji);
-      return;
-    }
-
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const newCaption = caption.substring(0, start) + emoji + caption.substring(end);
-    setCaption(newCaption);
-
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + emoji.length, start + emoji.length);
-    }, 50);
-  };
-
-  // Handle File Drag & Drop / Upload
-  const handleFileUpload = async (file) => {
-    if (!file) return;
+  // Multiple files upload handler
+  const handleMultipleFileUpload = async (files) => {
+    if (!files || files.length === 0) return;
     setUploading(true);
     setNotice(null);
 
     const formData = new FormData();
-    formData.append('media', file);
+    for (let i = 0; i < files.length; i++) {
+      formData.append('media', files[i]);
+    }
 
     try {
       const res = await fetch('/api/upload', {
@@ -111,9 +93,9 @@ export default function PostPublisher({ accounts, onPostCreated }) {
       const data = await res.json();
 
       if (data.success) {
-        setMediaUrl(data.fileUrl);
-        setMediaType(data.mediaType);
-        setMediaFile(file);
+        const newUrls = data.mediaUrls || [data.fileUrl];
+        setMediaUrls(prev => [...prev, ...newUrls]);
+        setMediaType(data.mediaType || 'image');
       } else {
         throw new Error(data.error || 'Tải file thất bại');
       }
@@ -124,16 +106,14 @@ export default function PostPublisher({ accounts, onPostCreated }) {
     }
   };
 
-  const handleAddPresetHashtag = (tag) => {
-    if (!hashtags.includes(tag)) {
-      setHashtags(prev => (prev ? `${prev} ${tag}` : tag));
-    }
+  const removeMediaUrl = (indexToRemove) => {
+    setMediaUrls(prev => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!caption.trim() && !mediaUrl) {
+    if (!caption.trim() && mediaUrls.length === 0) {
       setNotice({ type: 'error', text: 'Vui lòng nhập nội dung bài viết hoặc tải lên hình ảnh / video.' });
       return;
     }
@@ -152,7 +132,8 @@ export default function PostPublisher({ accounts, onPostCreated }) {
         caption,
         hashtags,
         firstComment,
-        mediaUrl,
+        mediaUrl: mediaUrls[0] || '',
+        mediaUrls: mediaUrls,
         mediaType,
         platforms: ['facebook'],
         targetAccountIds: selectedPageIds,
@@ -172,16 +153,15 @@ export default function PostPublisher({ accounts, onPostCreated }) {
       setNotice({
         type: 'success',
         text: postMode === 'now' 
-          ? `🚀 Bài viết đã được xuất bản thành công lên ${selectedPageIds.length} Fanpage Facebook được chọn!`
-          : '📅 Bài viết đã được thêm vào lịch trình tự động đăng!'
+          ? `Bài viết đã xuất bản thành công lên ${selectedPageIds.length} Fanpage Facebook!`
+          : 'Bài viết đã được thêm vào lịch trình tự động đăng!'
       });
 
       // Reset Form
       setTitle('');
       setCaption('');
       setFirstComment('');
-      setMediaUrl('');
-      setMediaFile(null);
+      setMediaUrls([]);
       if (onPostCreated) onPostCreated();
 
     } catch (err) {
@@ -192,94 +172,207 @@ export default function PostPublisher({ accounts, onPostCreated }) {
   };
 
   return (
-    <div className="grid-2">
-      {/* LEFT: Unified Content Creator */}
+    <div className="grid-2" style={{ alignItems: 'start' }}>
+      {/* LEFT: Clean Form */}
       <div className="glass-card" style={{ padding: '24px' }}>
-        <h2 style={{ fontSize: '1.3rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Sparkles color="#1877f2" /> Đăng Bài Fanpage Facebook
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '16px' }}>
+          Soạn Bài Đăng Fanpage Facebook
         </h2>
 
         {notice && (
-          <div 
-            style={{ 
-              padding: '12px 16px', 
-              borderRadius: '12px', 
-              marginBottom: '20px', 
-              background: notice.type === 'success' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              border: `1px solid ${notice.type === 'success' ? '#22c55e' : '#ef4444'}`,
-              color: notice.type === 'success' ? '#4ade80' : '#f87171',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px'
-            }}
-          >
-            {notice.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-            <span style={{ fontSize: '0.9rem' }}>{notice.text}</span>
+          <div className={`alert alert-${notice.type}`} style={{ marginBottom: '16px', padding: '10px 14px', fontSize: '0.85rem' }}>
+            <span>{notice.text}</span>
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
+          {/* Title */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Tiêu Đề Bài Viết (Tùy chọn - Sẽ đứng ở đầu nội dung bài đăng)</label>
+            <input 
+              type="text" 
+              className="input-field"
+              placeholder="Nhập tiêu đề..."
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+          </div>
 
-          {/* 1. Facebook Page Selection Checklist */}
-          <div className="form-group" style={{ background: 'rgba(24, 119, 242, 0.06)', padding: '16px', borderRadius: '14px', border: '1px solid rgba(24, 119, 242, 0.2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <label className="form-label" style={{ margin: 0, color: '#60a5fa' }}>
-                <Facebook size={18} /> Chọn Fanpage Đăng Bài ({selectedPageIds.length}/{fbAccounts.length})
+          {/* Caption Textarea */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Nội Dung Bài Đăng (Caption) (*)</label>
+            <textarea 
+              className="input-field" 
+              rows={6}
+              placeholder="Nhập nội dung bài đăng..."
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              required
+            />
+          </div>
+
+          {/* Hashtags & First Comment */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+            <div className="form-group">
+              <label className="form-label">Hashtags</label>
+              <input 
+                type="text" 
+                className="input-field"
+                placeholder="#hashtag1 #hashtag2"
+                value={hashtags}
+                onChange={(e) => setHashtags(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Bình Luận Đầu (First Comment)</label>
+              <input 
+                type="text" 
+                className="input-field"
+                placeholder="Bình luận tự động..."
+                value={firstComment}
+                onChange={(e) => setFirstComment(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Multiple Image Upload */}
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label className="form-label">Hình Ảnh / Video (Có thể chọn nhiều file)</label>
+
+            <div 
+              style={{
+                border: '1px dashed #475569',
+                borderRadius: '8px',
+                padding: '14px',
+                textAlign: 'center',
+                background: '#0f172a',
+                cursor: 'pointer',
+                marginBottom: mediaUrls.length > 0 ? '10px' : '0'
+              }}
+              onClick={() => document.getElementById('multi-file-input').click()}
+            >
+              <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                {uploading ? 'Đang tải media lên...' : 'Bấm để chọn 1 hoặc nhiều ảnh / video'}
+              </div>
+              <input 
+                id="multi-file-input"
+                type="file" 
+                multiple
+                accept="image/*,video/*" 
+                style={{ display: 'none' }}
+                onChange={(e) => handleMultipleFileUpload(e.target.files)}
+              />
+            </div>
+
+            {/* Media Preview Grid */}
+            {mediaUrls.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
+                {mediaUrls.map((url, idx) => (
+                  <div 
+                    key={idx} 
+                    style={{ 
+                      position: 'relative', 
+                      height: '80px', 
+                      borderRadius: '6px', 
+                      overflow: 'hidden', 
+                      border: '1px solid #334155' 
+                    }}
+                  >
+                    {mediaType === 'video' ? (
+                      <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => removeMediaUrl(idx)}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        background: '#0f172a',
+                        color: '#ef4444',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '18px',
+                        height: '18px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px'
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Select Target Fanpages with Grouping */}
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>
+                Chọn Fanpage Đăng Bài ({selectedPageIds.length}/{fbAccounts.length})
               </label>
 
-              {fbAccounts.length > 0 && (
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {/* Group Selector */}
+                <select 
+                  className="input-field" 
+                  value={selectedGroupFilter} 
+                  onChange={(e) => setSelectedGroupFilter(e.target.value)}
+                  style={{ padding: '2px 8px', fontSize: '0.75rem', width: 'auto' }}
+                >
+                  <option value="ALL">Tất cả nhóm</option>
+                  {groupsList.map(grp => (
+                    <option key={grp} value={grp}>Nhóm: {grp}</option>
+                  ))}
+                </select>
+
                 <button 
                   type="button" 
                   className="btn btn-secondary" 
-                  style={{ padding: '4px 10px', fontSize: '0.75rem' }}
-                  onClick={toggleSelectAllPages}
+                  style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                  onClick={toggleSelectAllFilteredPages}
                 >
-                  {selectedPageIds.length === fbAccounts.length ? 'Bỏ Chọn Tất Cả' : 'Chọn Tất Cả'}
+                  Chọn nhóm này
                 </button>
-              )}
+              </div>
             </div>
 
             {fbAccounts.length === 0 ? (
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Chưa có Fanpage nào. Vui lòng sang tab <b>Quản Lý Fanpage</b> dán Access Token để tải danh sách Fanpage.
-              </p>
+              <div style={{ fontSize: '0.85rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '6px' }}>
+                Chưa có Fanpage nào kết nối. Hãy sang tab Fanpage & Roles để kết nối tài khoản.
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {fbAccounts.map((page) => {
-                  const isSelected = selectedPageIds.includes(page.id);
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', maxHeight: '120px', overflowY: 'auto' }}>
+                {filteredFbAccounts.map(acc => {
+                  const isSelected = selectedPageIds.includes(acc.id);
                   return (
-                    <div 
-                      key={page.id} 
-                      onClick={() => togglePageSelection(page.id)}
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        padding: '10px 14px', 
-                        borderRadius: '10px', 
-                        background: isSelected ? 'rgba(24, 119, 242, 0.18)' : 'rgba(11, 15, 25, 0.6)',
-                        border: `1px solid ${isSelected ? '#1877f2' : 'var(--border-color)'}`,
+                    <div
+                      key={acc.id}
+                      onClick={() => togglePageSelection(acc.id)}
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: '6px',
+                        background: isSelected ? 'rgba(37, 99, 235, 0.25)' : '#0f172a',
+                        border: isSelected ? '1px solid #2563eb' : '1px solid #334155',
+                        color: isSelected ? '#60a5fa' : 'var(--text-muted)',
                         cursor: 'pointer',
-                        transition: 'all 0.2s ease'
+                        fontSize: '0.8rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        {page.avatar ? (
-                          <img src={page.avatar} alt={page.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
-                        ) : (
-                          <div className="avatar-placeholder" style={{ width: '32px', height: '32px', fontSize: '0.8rem' }}>
-                            {page.name.substring(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <h4 style={{ fontSize: '0.9rem', fontWeight: 600 }}>{page.name}</h4>
-                          <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>ID: {page.id}</span>
-                        </div>
-                      </div>
-
-                      <div style={{ color: isSelected ? '#60a5fa' : 'var(--text-dim)' }}>
-                        {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
-                      </div>
+                      {acc.avatar && <img src={acc.avatar} alt="" style={{ width: '16px', height: '16px', borderRadius: '50%' }} />}
+                      <span>{acc.name}</span>
+                      <span style={{ fontSize: '0.7rem', opacity: 0.7 }}>({acc.group || 'Mặc định'})</span>
                     </div>
                   );
                 })}
@@ -287,288 +380,116 @@ export default function PostPublisher({ accounts, onPostCreated }) {
             )}
           </div>
 
-          {/* 2. Unified Content Textarea & Unicode Font Format Toolbar */}
-          <div className="form-group">
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <label className="form-label" style={{ margin: 0 }}>Nội Dung Bài Đăng (Caption)</label>
+          {/* Mode Switcher & Submit */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+            <button 
+              type="button" 
+              className={`btn ${postMode === 'now' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setPostMode('now')}
+            >
+              Đăng Ngay
+            </button>
 
-              {/* Rich Unicode Formatting Toolbar */}
-              <div style={{ display: 'flex', gap: '4px', background: 'rgba(15, 23, 42, 0.8)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <button
-                  type="button"
-                  title="Bôi đen văn bản rồi bấm In Đậm"
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 8px', fontSize: '0.8rem', fontWeight: 700 }}
-                  onClick={() => applyFontStyle('bold')}
-                >
-                  <Bold size={13} /> 𝗕𝗼𝗹𝗱
-                </button>
-
-                <button
-                  type="button"
-                  title="Bôi đen văn bản rồi bấm In Nghiêng"
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 8px', fontSize: '0.8rem', fontStyle: 'italic' }}
-                  onClick={() => applyFontStyle('italic')}
-                >
-                  <Italic size={13} /> 𝘐𝘵𝘢𝘭𝘪𝘤
-                </button>
-
-                <button
-                  type="button"
-                  title="Chữ Thư Pháp / Cursive"
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 8px', fontSize: '0.8rem' }}
-                  onClick={() => applyFontStyle('cursive')}
-                >
-                  𝒜𝓇𝓉
-                </button>
-
-                <button
-                  type="button"
-                  title="Chữ Gothic"
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 8px', fontSize: '0.8rem' }}
-                  onClick={() => applyFontStyle('gothic')}
-                >
-                  𝔊𝔬𝔱𝔥𝔦𝔠
-                </button>
-
-                <button
-                  type="button"
-                  title="Chữ Máy Tính Monospace"
-                  className="btn btn-secondary"
-                  style={{ padding: '3px 8px', fontSize: '0.8rem', fontFamily: 'monospace' }}
-                  onClick={() => applyFontStyle('monospace')}
-                >
-                  <Type size={13} /> Code
-                </button>
-              </div>
-            </div>
-
-            {/* Quick Emoji Toolbar */}
-            <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Smile size={14} /> Emoji:
-              </span>
-              {['🔥', '🚀', '💡', '👉', '✅', '📌', '🎯', '⭐', '💬', '💥', '❤️'].map(emoji => (
-                <button
-                  key={emoji}
-                  type="button"
-                  style={{ background: 'rgba(255,255,255,0.06)', border: 'none', borderRadius: '6px', padding: '2px 6px', cursor: 'pointer', fontSize: '0.9rem' }}
-                  onClick={() => insertEmoji(emoji)}
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-
-            <textarea 
-              ref={captionRef}
-              className="textarea-field"
-              style={{ minHeight: '140px', lineHeight: '1.5' }}
-              placeholder="Nhập nội dung bài đăng. Bạn có thể bôi đen chữ rồi bấm nút phông chữ phía trên (In đậm 𝗕𝗼𝗹𝗱, Nghiêng 𝘐𝘵𝘢𝘭𝘪𝘤, 𝒜𝓇𝓉...) để tạo phông chữ bắt mắt trên Facebook!"
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-            />
+            <button 
+              type="button" 
+              className={`btn ${postMode === 'schedule' ? 'btn-primary' : 'btn-secondary'}`}
+              onClick={() => setPostMode('schedule')}
+            >
+              Lên Lịch Đăng Bài
+            </button>
           </div>
 
-          {/* Media Uploader */}
-          <div className="form-group">
-            <label className="form-label">File Media (Ảnh hoặc Video Reels)</label>
-            {mediaUrl ? (
-              <div className="media-preview-box">
-                {mediaType === 'video' ? (
-                  <video src={mediaUrl} controls autoPlay muted />
-                ) : (
-                  <img src={mediaUrl} alt="Media Preview" />
-                )}
-                <button type="button" className="remove-media-btn" onClick={() => setMediaUrl('')}>
-                  <X size={18} />
-                </button>
-              </div>
-            ) : (
-              <div 
-                className="dropzone"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (e.dataTransfer.files?.[0]) handleFileUpload(e.dataTransfer.files[0]);
-                }}
-                onClick={() => document.getElementById('mediaInput').click()}
-              >
-                <Upload size={32} color="#1877f2" style={{ marginBottom: '8px' }} />
-                <p style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                  {uploading ? 'Đang tải file lên máy chủ...' : 'Kéo thả file vào đây hoặc bấm để chọn'}
-                </p>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Hỗ trợ MP4, MOV (Video Reels) & JPG, PNG</span>
-                <input 
-                  id="mediaInput" 
-                  type="file" 
-                  accept="image/*,video/*" 
-                  style={{ display: 'none' }}
-                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Title Optional */}
-          <div className="form-group">
-            <label className="form-label">Tiêu Đề Video (Dùng khi đăng Facebook Video / Reel)</label>
-            <input 
-              type="text" 
-              className="input-field" 
-              placeholder="Ví dụ: Chia sẻ bí quyết tăng doanh số năm 2026..." 
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-
-          {/* Hashtags */}
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <label className="form-label"><Hash size={14} /> Hashtags</label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                {['#reels', '#viral', '#trending', '#fanpage'].map(tag => (
-                  <button 
-                    key={tag} 
-                    type="button" 
-                    className="btn btn-secondary" 
-                    style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                    onClick={() => handleAddPresetHashtag(tag)}
-                  >
-                    + {tag}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <input 
-              type="text" 
-              className="input-field" 
-              placeholder="#facebook #reels #shop" 
-              value={hashtags}
-              onChange={(e) => setHashtags(e.target.value)}
-            />
-          </div>
-
-          {/* First Comment Auto-Posting */}
-          <div className="form-group">
-            <label className="form-label">
-              <MessageSquare size={16} color="#60a5fa" /> Tự Động Bình Luận Đầu (First Comment)
-            </label>
-            <input 
-              type="text" 
-              className="input-field" 
-              placeholder="Ví dụ: 👉 Inbox Fanpage ngay để nhận tư vấn miễn phí!" 
-              value={firstComment}
-              onChange={(e) => setFirstComment(e.target.value)}
-            />
-          </div>
-
-          {/* Schedule vs Publish Now Selection */}
-          <div className="form-group">
-            <label className="form-label">Thời Gian Xuất Bản</label>
-            <div style={{ display: 'flex', gap: '12px', marginBottom: postMode === 'schedule' ? '12px' : '0' }}>
-              <button 
-                type="button" 
-                className={`btn ${postMode === 'now' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1 }}
-                onClick={() => setPostMode('now')}
-              >
-                <Send size={16} /> Đăng Tức Thì
-              </button>
-
-              <button 
-                type="button" 
-                className={`btn ${postMode === 'schedule' ? 'btn-primary' : 'btn-secondary'}`}
-                style={{ flex: 1 }}
-                onClick={() => setPostMode('schedule')}
-              >
-                <Calendar size={16} /> Lên Lịch Đăng
-              </button>
-            </div>
-
-            {postMode === 'schedule' && (
+          {postMode === 'schedule' && (
+            <div className="form-group" style={{ marginBottom: '14px' }}>
+              <label className="form-label">Chọn Ngày & Giờ Xuất Bản</label>
               <input 
                 type="datetime-local" 
                 className="input-field"
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
-                required={postMode === 'schedule'}
+                required
               />
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Submit Button */}
           <button 
             type="submit" 
-            className="btn btn-primary" 
-            style={{ width: '100%', padding: '14px', fontSize: '1rem', marginTop: '10px' }}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px', fontSize: '0.95rem', fontWeight: 600 }}
             disabled={publishing}
           >
-            {publishing ? '🚀 Đang xuất bản bài đăng lên Facebook Page...' : (postMode === 'now' ? `🚀 Đăng Bài Ngay Lên ${selectedPageIds.length} Fanpage` : '📅 Thêm Vào Lịch Đăng Tự Động')}
+            {publishing ? 'Đang Xử Lý...' : (postMode === 'now' ? 'Bấm Đăng Bài Ngay' : 'Lưu Lịch Đăng Tự Động')}
           </button>
         </form>
       </div>
 
-      {/* RIGHT: Live Phone Preview Mockup */}
-      <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Eye size={18} color="#1877f2" /> Xem Trước Giao Diện Fanpage
-          </h3>
-        </div>
+      {/* RIGHT: Live Preview */}
+      <div className="glass-card" style={{ padding: '24px' }}>
+        <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '14px' }}>
+          Xem Trước Giao Diện Bài Đăng (Live Preview)
+        </h3>
 
-        {/* Selected Page Target Display */}
-        <div style={{ marginBottom: '14px', padding: '10px 14px', borderRadius: '10px', background: 'rgba(24, 119, 242, 0.1)', border: '1px solid rgba(24, 119, 242, 0.2)', fontSize: '0.85rem' }}>
-          📌 <b>Đang chọn:</b> {selectedPageIds.length} / {fbAccounts.length} Fanpage Facebook
-        </div>
-
-        {/* Phone Device Mockup Container */}
-        <div className="phone-mockup" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div className="preview-header">
-            {fbAccounts.find(p => selectedPageIds.includes(p.id))?.avatar ? (
-              <img 
-                src={fbAccounts.find(p => selectedPageIds.includes(p.id))?.avatar} 
-                alt="Fanpage Avatar" 
-                style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} 
-              />
-            ) : (
-              <div className="avatar-placeholder">FB</div>
-            )}
-
+        <div 
+          style={{ 
+            background: '#1e293b', 
+            borderRadius: '8px', 
+            padding: '14px', 
+            color: '#f8fafc',
+            border: '1px solid #334155' 
+          }}
+        >
+          {/* Header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.9rem' }}>
+              f
+            </div>
             <div>
-              <h4 style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                {fbAccounts.find(p => selectedPageIds.includes(p.id))?.name || 'Tên Fanpage Facebook'}
-              </h4>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>Vừa xong • 🌐 Thích Trang</span>
+              <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                {fbAccounts.length > 0 ? fbAccounts[0].name : 'Tên Fanpage Facebook'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Vừa xong · Quản lý đa kênh</div>
             </div>
           </div>
 
-          <div style={{ fontSize: '0.9rem', lineHeight: '1.5', marginBottom: '12px', whiteSpace: 'pre-wrap' }}>
-            {caption || 'Nội dung xem trước bài đăng của bạn sẽ hiển thị tại đây...'}
+          {/* Caption preview (Title prepended) */}
+          <div style={{ fontSize: '0.875rem', lineHeight: '1.5', whiteSpace: 'pre-wrap', marginBottom: '10px' }}>
+            {title && <div style={{ fontWeight: 700, marginBottom: '6px' }}>{title}</div>}
+            {caption || 'Nội dung bài viết sẽ hiển thị tại đây...'}
             {hashtags && <div style={{ color: '#60a5fa', marginTop: '6px' }}>{hashtags}</div>}
           </div>
 
-          <div style={{ flex: 1, minHeight: '240px', background: '#000', borderRadius: '12px', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {mediaUrl ? (
-              mediaType === 'video' ? (
-                <video src={mediaUrl} controls autoPlay muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <img src={mediaUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-              )
-            ) : (
-              <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '20px' }}>
-                {mediaType === 'video' ? <Film size={36} /> : <Image size={36} />}
-                <p style={{ marginTop: '8px', fontSize: '0.85rem' }}>Khung ảnh / Video bài đăng</p>
-              </div>
-            )}
-          </div>
+          {/* Media preview */}
+          {mediaUrls.length > 0 ? (
+            <div 
+              style={{ 
+                borderRadius: '6px', 
+                overflow: 'hidden', 
+                background: '#0f172a',
+                display: 'grid',
+                gridTemplateColumns: mediaUrls.length > 1 ? '1fr 1fr' : '1fr',
+                gap: '4px',
+                maxHeight: '300px'
+              }}
+            >
+              {mediaUrls.slice(0, 4).map((url, idx) => (
+                <img 
+                  key={idx}
+                  src={url} 
+                  alt="" 
+                  style={{ width: '100%', height: mediaUrls.length > 1 ? '140px' : '260px', objectFit: 'cover' }} 
+                />
+              ))}
+            </div>
+          ) : (
+            <div style={{ height: '120px', borderRadius: '6px', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
+              Khu vực hiển thị Hình ảnh / Video
+            </div>
+          )}
 
+          {/* First Comment */}
           {firstComment && (
-            <div style={{ marginTop: '12px', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.06)', borderLeft: '3px solid #60a5fa', fontSize: '0.8rem' }}>
-              💬 <b>First Comment (Tự động):</b> {firstComment}
+            <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #334155', fontSize: '0.8rem', color: '#94a3b8' }}>
+              <strong>Bình luận tự động:</strong> {firstComment}
             </div>
           )}
         </div>

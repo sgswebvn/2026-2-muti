@@ -1,12 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Key, Facebook, Trash2, CheckCircle2, ShieldAlert, RefreshCw, HelpCircle, ExternalLink } from 'lucide-react';
 
 export default function AccountManager({ accounts, fetchAccounts, onOpenGuide }) {
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
+  const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [tokenInput, setTokenInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingTokens, setCheckingTokens] = useState(false);
   const [message, setMessage] = useState(null);
+
+  // Search & Group Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedGroupFilter, setSelectedGroupFilter] = useState('ALL');
+
+  // Role invite modal state
+  const [selectedPageForRole, setSelectedPageForRole] = useState(null);
+  const [userEmailOrId, setUserEmailOrId] = useState('');
+  const [roleInput, setRoleInput] = useState('CREATE_CONTENT');
+  const [invitingRole, setInvitingRole] = useState(false);
+
+  // Group editing state
+  const [editingGroupAcc, setEditingGroupAcc] = useState(null);
+  const [groupInput, setGroupInput] = useState('');
 
   useEffect(() => {
     fetchSettings();
@@ -19,6 +34,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       if (data.settings) {
         setAppId(data.settings.appId || '');
         setAppSecret(data.settings.appSecret || '');
+        setOpenaiApiKey(data.settings.openaiApiKey || '');
       }
     } catch (err) {
       console.error('Error fetching settings:', err);
@@ -30,11 +46,11 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appId, appSecret })
+        body: JSON.stringify({ appId, appSecret, openaiApiKey })
       });
-      setMessage({ type: 'success', text: 'Đã lưu App ID & App Secret thành công!' });
+      setMessage({ type: 'success', text: 'Đã lưu cấu hình App & OpenAI API Key thành công!' });
     } catch (err) {
-      setMessage({ type: 'error', text: 'Không thể lưu cài đặt App.' });
+      setMessage({ type: 'error', text: 'Không thể lưu cài đặt.' });
     }
   };
 
@@ -46,7 +62,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     setMessage(null);
 
     try {
-      if (appId || appSecret) {
+      if (appId || appSecret || openaiApiKey) {
         await saveSettings();
       }
 
@@ -75,6 +91,42 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
+  const handleCheckTokens = async () => {
+    setCheckingTokens(true);
+    setMessage(null);
+    try {
+      const res = await fetch('/api/accounts/check-tokens', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        fetchAccounts();
+        setMessage({ type: 'success', text: 'Đã hoàn tất kiểm tra sức khỏe Access Token của tất cả các Fanpage!' });
+      } else {
+        throw new Error(data.error || 'Không thể kiểm tra token');
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setCheckingTokens(false);
+    }
+  };
+
+  const handleSaveAccountGroup = async (accId, newGroup) => {
+    try {
+      const res = await fetch(`/api/accounts/facebook/${accId}/group`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ group: newGroup })
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchAccounts();
+        setEditingGroupAcc(null);
+      }
+    } catch (err) {
+      alert('Không thể cập nhật nhóm Fanpage.');
+    }
+  };
+
   const handleDeleteAccount = async (id) => {
     if (!window.confirm(`Bạn có chắc muốn xóa Fanpage này khỏi ứng dụng?`)) return;
 
@@ -89,25 +141,58 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
+  const handleInviteRole = async (e) => {
+    e.preventDefault();
+    if (!selectedPageForRole || !userEmailOrId.trim()) return;
+
+    setInvitingRole(true);
+    try {
+      const res = await fetch(`/api/accounts/${selectedPageForRole.id}/roles`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: userEmailOrId.trim(), role: roleInput })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Đã gửi lời mời phân quyền thành công!');
+        setSelectedPageForRole(null);
+        setUserEmailOrId('');
+      } else {
+        throw new Error(data.error || 'Lỗi gửi lời mời');
+      }
+    } catch (err) {
+      alert(`Lỗi mời vai trò: ${err.message}`);
+    } finally {
+      setInvitingRole(false);
+    }
+  };
+
   const fbAccounts = accounts.filter(a => a.platform === 'facebook');
 
+  // Unique groups list
+  const groupsList = Array.from(new Set(fbAccounts.map(a => a.group || 'Mặc định')));
+
+  // Filtered accounts by search and group
+  const filteredAccounts = fbAccounts.filter(acc => {
+    const matchesSearch = acc.name.toLowerCase().includes(searchQuery.toLowerCase()) || acc.id.includes(searchQuery);
+    const matchesGroup = selectedGroupFilter === 'ALL' || (acc.group || 'Mặc định') === selectedGroupFilter;
+    return matchesSearch && matchesGroup;
+  });
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Top Banner Message */}
       {message && (
         <div 
           className="glass-card" 
           style={{
-            padding: '16px 20px',
+            padding: '12px 18px',
             borderColor: message.type === 'success' ? '#22c55e' : '#ef4444',
             background: message.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px'
+            fontSize: '0.875rem'
           }}
         >
-          {message.type === 'success' ? <CheckCircle2 color="#22c55e" /> : <ShieldAlert color="#ef4444" />}
-          <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>{message.text}</span>
+          <span>{message.text}</span>
         </div>
       )}
 
@@ -115,139 +200,288 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       <div className="grid-2">
         {/* 1. Token Input Form */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '1.15rem', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
-            <Facebook size={20} color="#1877f2" />
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', fontWeight: 700 }}>
             Kết Nối Access Token Fanpage
           </h3>
 
           <form onSubmit={handleConnectToken}>
             <div className="form-group">
-              <label className="form-label">Access Token (Dán token lấy từ Graph API Explorer)</label>
+              <label className="form-label">Access Token (Dán token từ Graph API Explorer)</label>
               <textarea
                 className="textarea-field"
-                style={{ minHeight: '110px', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                style={{ minHeight: '100px', fontSize: '0.85rem', fontFamily: 'monospace' }}
                 placeholder="Dán mã EAAPGagVmkiQ..."
                 value={tokenInput}
                 onChange={(e) => setTokenInput(e.target.value)}
               />
             </div>
 
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '14px' }} disabled={loading}>
-              {loading ? <RefreshCw className="animate-spin" size={18} /> : null}
-              {loading ? 'Đang kiểm tra & quét Fanpage...' : '🚀 Kết Nối & Quét Danh Sách Fanpage'}
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
+              {loading ? 'Đang quét Fanpage...' : 'Kết Nối & Quét Danh Sách Fanpage'}
             </button>
           </form>
         </div>
 
-        {/* 2. Meta App Credentials */}
+        {/* 2. Meta App & OpenAI Credentials */}
         <div className="glass-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Key size={18} color="#1877f2" />
-              Meta App Credentials (Tùy chọn)
-            </h3>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Cấu Hình Hệ Thống & OpenAI Key</h3>
             <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={onOpenGuide}>
-              <HelpCircle size={14} /> Hướng Dẫn
+              Hướng Dẫn
             </button>
           </div>
 
-          <p style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-            Nhập App ID & Secret để ứng dụng tự đổi token 1 giờ thành <b>Long-Lived Token (60 ngày / Vĩnh viễn)</b>.
-          </p>
-
-          <div className="form-group">
-            <label className="form-label">Meta App ID</label>
-            <input
-              type="text"
-              className="input-field"
-              placeholder="1062583589573156"
-              value={appId}
-              onChange={(e) => setAppId(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Meta App Secret</label>
+          <div className="form-group" style={{ marginBottom: '10px' }}>
+            <label className="form-label">OpenAI API Key (Tích hợp ChatGPT Content)</label>
             <input
               type="password"
               className="input-field"
-              placeholder="App Secret..."
-              value={appSecret}
-              onChange={(e) => setAppSecret(e.target.value)}
+              placeholder="sk-proj-..."
+              value={openaiApiKey}
+              onChange={(e) => setOpenaiApiKey(e.target.value)}
             />
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+            <div className="form-group">
+              <label className="form-label">Meta App ID</label>
+              <input
+                type="text"
+                className="input-field"
+                placeholder="106258358..."
+                value={appId}
+                onChange={(e) => setAppId(e.target.value)}
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Meta App Secret</label>
+              <input
+                type="password"
+                className="input-field"
+                placeholder="App Secret..."
+                value={appSecret}
+                onChange={(e) => setAppSecret(e.target.value)}
+              />
+            </div>
+          </div>
+
           <button className="btn btn-secondary" style={{ width: '100%' }} onClick={saveSettings}>
-            Lưu Cấu Hình App
+            Lưu Cấu Hình
           </button>
         </div>
       </div>
 
-      {/* Connected Facebook Pages List Section */}
+      {/* Visual Connected Facebook Pages List with Grouping & Search */}
       <div className="glass-card" style={{ padding: '24px' }}>
-        <h3 style={{ fontSize: '1.2rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <Facebook color="#1877f2" /> Danh Sách Fanpage Đã Kết Nối ({fbAccounts.length})
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
+            Quản Lý Danh Sách Fanpage ({fbAccounts.length})
+          </h3>
 
-        {fbAccounts.length === 0 ? (
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Search Input */}
+            <input 
+              type="text" 
+              className="input-field" 
+              placeholder="Tìm theo tên hoặc ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ width: '180px', fontSize: '0.85rem', padding: '6px 12px' }}
+            />
+
+            {/* Group Filter */}
+            <select 
+              className="input-field"
+              value={selectedGroupFilter}
+              onChange={(e) => setSelectedGroupFilter(e.target.value)}
+              style={{ width: '160px', fontSize: '0.85rem', padding: '6px 12px' }}
+            >
+              <option value="ALL">Tất cả nhóm ({fbAccounts.length})</option>
+              {groupsList.map(grp => (
+                <option key={grp} value={grp}>Nhóm: {grp}</option>
+              ))}
+            </select>
+
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleCheckTokens}
+              disabled={checkingTokens}
+              style={{ fontSize: '0.85rem', padding: '6px 12px' }}
+            >
+              {checkingTokens ? 'Đang Kiểm Tra...' : 'Kiểm Tra Token'}
+            </button>
+          </div>
+        </div>
+
+        {filteredAccounts.length === 0 ? (
           <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <ShieldAlert size={48} style={{ opacity: 0.4, marginBottom: '12px' }} />
-            <p>Chưa có Fanpage nào. Vui lòng dán Access Token phía trên để tự động nhận diện tất cả Fanpage!</p>
+            <p>Không tìm thấy Fanpage nào phù hợp với bộ lọc.</p>
           </div>
         ) : (
           <div className="grid-3">
-            {fbAccounts.map((acc) => (
-              <div 
-                key={acc.id} 
-                className="glass-card" 
-                style={{ 
-                  padding: '16px', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  background: 'rgba(11, 15, 25, 0.6)'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {acc.avatar ? (
-                    <img 
-                      src={acc.avatar} 
-                      alt={acc.name} 
-                      style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} 
-                    />
-                  ) : (
-                    <div className="avatar-placeholder">{acc.name.substring(0, 2).toUpperCase()}</div>
-                  )}
+            {filteredAccounts.map((acc) => {
+              const isInvalid = acc.tokenStatus === 'invalid' || acc.tokenStatus === 'expired';
+              const currentGroup = acc.group || 'Mặc định';
 
-                  <div>
-                    <h4 style={{ fontSize: '0.95rem', fontWeight: 600 }}>{acc.name}</h4>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{acc.category || 'Facebook Page'}</span>
-                    <div style={{ marginTop: '4px' }}>
-                      <a 
-                        href={`https://www.facebook.com/${acc.id}`} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        style={{ fontSize: '0.725rem', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: '3px', textDecoration: 'none' }}
-                      >
-                        ID: {acc.id} <ExternalLink size={10} />
-                      </a>
+              return (
+                <div 
+                  key={acc.id} 
+                  className="glass-card" 
+                  style={{ 
+                    padding: '16px', 
+                    display: 'flex', 
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '12px',
+                    background: '#0f172a',
+                    border: '1px solid #334155'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {acc.avatar ? (
+                      <img 
+                        src={acc.avatar} 
+                        alt={acc.name} 
+                        style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} 
+                      />
+                    ) : (
+                      <div className="avatar-placeholder">{acc.name.substring(0, 2).toUpperCase()}</div>
+                    )}
+
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', justifyContent: 'space-between' }}>
+                        <h4 style={{ fontSize: '0.9rem', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {acc.name}
+                        </h4>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                        {/* Group Tag Badge */}
+                        <span 
+                          onClick={() => {
+                            setEditingGroupAcc(acc);
+                            setGroupInput(currentGroup);
+                          }}
+                          style={{ 
+                            fontSize: '0.7rem', 
+                            padding: '2px 8px', 
+                            borderRadius: '4px', 
+                            background: '#334155', 
+                            color: '#94a3b8', 
+                            border: '1px solid #475569',
+                            cursor: 'pointer' 
+                          }}
+                          title="Bấm để đổi nhóm"
+                        >
+                          Nhóm: {currentGroup}
+                        </span>
+
+                        {isInvalid ? (
+                          <span style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 600 }}>Lỗi Token</span>
+                        ) : (
+                          <span style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 600 }}>Token Hoạt Động</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <button 
-                  className="btn btn-danger" 
-                  style={{ padding: '8px', borderRadius: '50%' }}
-                  onClick={() => handleDeleteAccount(acc.id)}
-                  title="Xóa Fanpage này"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            ))}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #334155', paddingTop: '10px' }}>
+                    <button 
+                      className="btn btn-secondary" 
+                      style={{ fontSize: '0.75rem', padding: '4px 8px' }}
+                      onClick={() => setSelectedPageForRole(acc)}
+                    >
+                      Mời Role Fanpage
+                    </button>
+
+                    <button 
+                      className="btn btn-danger" 
+                      style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                      onClick={() => handleDeleteAccount(acc.id)}
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* EDIT GROUP MODAL */}
+      {editingGroupAcc && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '20px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+              Phân Nhóm Cho Fanpage: {editingGroupAcc.name}
+            </h3>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label">Tên Nhóm (VD: Bán Hàng, Bất Động Sản, Thời Trang)</label>
+              <input 
+                type="text" 
+                className="input-field" 
+                value={groupInput}
+                onChange={(e) => setGroupInput(e.target.value)}
+                placeholder="Nhập tên nhóm..."
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button className="btn btn-secondary" onClick={() => setEditingGroupAcc(null)}>Hủy</button>
+              <button className="btn btn-primary" onClick={() => handleSaveAccountGroup(editingGroupAcc.id, groupInput)}>Lưu Nhóm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVITE ROLE MODAL */}
+      {selectedPageForRole && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '440px', padding: '20px' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px' }}>
+              Mời Phân Quyền Vai Trò Fanpage
+            </h3>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
+              Fanpage: <strong>{selectedPageForRole.name}</strong>
+            </div>
+
+            <form onSubmit={handleInviteRole}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label">Facebook User ID / Email Nguời Nhận</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Nhập ID Facebook hoặc Email..."
+                  value={userEmailOrId}
+                  onChange={(e) => setUserEmailOrId(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Vai Trò (Role Permission)</label>
+                <select 
+                  className="input-field"
+                  value={roleInput}
+                  onChange={(e) => setRoleInput(e.target.value)}
+                >
+                  <option value="CREATE_CONTENT">Người tạo nội dung (Content Creator / Editor)</option>
+                  <option value="MODERATE_COMMENTS">Người kiểm duyệt (Moderator)</option>
+                  <option value="EDIT_PROFILE">Quản trị viên trang (Page Administer)</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setSelectedPageForRole(null)}>Hủy</button>
+                <button type="submit" className="btn btn-primary" disabled={invitingRole}>
+                  {invitingRole ? 'Đang gửi...' : 'Gửi Lời Mời Role'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

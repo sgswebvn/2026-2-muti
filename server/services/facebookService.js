@@ -23,17 +23,37 @@ function getLocalFilePath(mediaUrl) {
 }
 
 /**
- * Publish Content to Facebook Page (Supports Text, Photo, or Video/Reels)
+ * Publish Content to Facebook Page (Supports Text, Single/Multi Photo, or Video/Reels)
  * @param {Object} pageAccount { id, accessToken, name }
- * @param {Object} postData { caption, hashtags, mediaUrl, mediaType, title }
+ * @param {Object} postData { caption, hashtags, mediaUrl, mediaUrls, mediaType, title }
  */
 export async function publishToFacebook(pageAccount, postData) {
   const { id: pageId, accessToken } = pageAccount;
-  const fullText = [postData.caption, postData.hashtags].filter(Boolean).join('\n\n');
+
+  // Build full text with Title as first paragraph if present
+  const textParts = [];
+  if (postData.title && postData.title.trim()) {
+    textParts.push(postData.title.trim());
+  }
+  if (postData.caption && postData.caption.trim()) {
+    textParts.push(postData.caption.trim());
+  }
+  if (postData.hashtags && postData.hashtags.trim()) {
+    textParts.push(postData.hashtags.trim());
+  }
+  const fullText = textParts.join('\n\n');
+
+  // Standardize mediaUrls list
+  let urls = [];
+  if (Array.isArray(postData.mediaUrls) && postData.mediaUrls.length > 0) {
+    urls = postData.mediaUrls;
+  } else if (postData.mediaUrl) {
+    urls = [postData.mediaUrl];
+  }
 
   try {
     // 1. Text-Only Feed Post
-    if (!postData.mediaUrl) {
+    if (urls.length === 0) {
       const res = await axios.post(`${GRAPH_URL}/${pageId}/feed`, null, {
         params: {
           message: fullText,
@@ -42,7 +62,6 @@ export async function publishToFacebook(pageAccount, postData) {
       });
       const postId = res.data.id;
 
-      // Auto First Comment if specified
       if (postData.firstComment && postId) {
         try {
           await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
@@ -63,48 +82,96 @@ export async function publishToFacebook(pageAccount, postData) {
       };
     }
 
-    const localFilePath = getLocalFilePath(postData.mediaUrl);
-
-    // 2. Photo Post
+    // 2. Photo Post (Single or Multiple Album/Carousel)
     if (postData.mediaType === 'image') {
-      let res;
-      if (localFilePath) {
-        // Direct Binary Upload using FormData (Works on localhost!)
-        const form = new FormData();
-        form.append('source', fs.createReadStream(localFilePath));
-        form.append('caption', fullText);
-        form.append('access_token', accessToken);
+      if (urls.length === 1) {
+        const localFilePath = getLocalFilePath(urls[0]);
+        let res;
+        if (localFilePath) {
+          const form = new FormData();
+          form.append('source', fs.createReadStream(localFilePath));
+          form.append('caption', fullText);
+          form.append('access_token', accessToken);
 
-        res = await axios.post(`${GRAPH_URL}/${pageId}/photos`, form, {
-          headers: form.getHeaders(),
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity
-        });
-      } else {
-        // Public Remote URL
-        res = await axios.post(`${GRAPH_URL}/${pageId}/photos`, null, {
-          params: {
-            url: postData.mediaUrl,
-            caption: fullText,
-            access_token: accessToken
-          }
-        });
-      }
-
-      const postId = res.data.post_id || res.data.id;
-
-      // Auto First Comment if specified
-      if (postData.firstComment && postId) {
-        try {
-          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
+          res = await axios.post(`${GRAPH_URL}/${pageId}/photos`, form, {
+            headers: form.getHeaders(),
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
+          });
+        } else {
+          res = await axios.post(`${GRAPH_URL}/${pageId}/photos`, null, {
             params: {
-              message: postData.firstComment,
+              url: urls[0],
+              caption: fullText,
               access_token: accessToken
             }
           });
-        } catch (commentErr) {
-          console.warn('Facebook Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
         }
+
+        const postId = res.data.post_id || res.data.id;
+
+        if (postData.firstComment && postId) {
+          try {
+            await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
+              params: { message: postData.firstComment, access_token: accessToken }
+            });
+          } catch (e) {}
+        }
+
+        return {
+          success: true,
+          postId: postId,
+          postUrl: `https://www.facebook.com/${postId}`
+        };
+      }
+
+      // Multi-Photo Post (Album Feed Post)
+      const photoIds = [];
+      for (const imgUrl of urls) {
+        const localFilePath = getLocalFilePath(imgUrl);
+        let photoRes;
+        if (localFilePath) {
+          const form = new FormData();
+          form.append('source', fs.createReadStream(localFilePath));
+          form.append('published', 'false');
+          form.append('access_token', accessToken);
+
+          photoRes = await axios.post(`${GRAPH_URL}/${pageId}/photos`, form, {
+            headers: form.getHeaders(),
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
+          });
+        } else {
+          photoRes = await axios.post(`${GRAPH_URL}/${pageId}/photos`, null, {
+            params: {
+              url: imgUrl,
+              published: false,
+              access_token: accessToken
+            }
+          });
+        }
+        if (photoRes.data && photoRes.data.id) {
+          photoIds.push(photoRes.data.id);
+        }
+      }
+
+      const attachedMedia = photoIds.map(id => ({ media_fbid: id }));
+      const feedRes = await axios.post(`${GRAPH_URL}/${pageId}/feed`, null, {
+        params: {
+          message: fullText,
+          attached_media: JSON.stringify(attachedMedia),
+          access_token: accessToken
+        }
+      });
+
+      const postId = feedRes.data.id;
+
+      if (postData.firstComment && postId) {
+        try {
+          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
+            params: { message: postData.firstComment, access_token: accessToken }
+          });
+        } catch (e) {}
       }
 
       return {
@@ -116,9 +183,9 @@ export async function publishToFacebook(pageAccount, postData) {
 
     // 3. Video / Reels Post
     if (postData.mediaType === 'video') {
+      const localFilePath = getLocalFilePath(urls[0]);
       let res;
       if (localFilePath) {
-        // Direct Binary Video Upload using FormData (Works on localhost!)
         const form = new FormData();
         form.append('source', fs.createReadStream(localFilePath));
         form.append('description', fullText);
@@ -131,10 +198,9 @@ export async function publishToFacebook(pageAccount, postData) {
           maxContentLength: Infinity
         });
       } else {
-        // Public Remote URL
         res = await axios.post(`${GRAPH_URL}/${pageId}/videos`, null, {
           params: {
-            file_url: postData.mediaUrl,
+            file_url: urls[0],
             description: fullText,
             title: postData.title || 'Video Reel',
             access_token: accessToken
@@ -144,18 +210,12 @@ export async function publishToFacebook(pageAccount, postData) {
 
       const videoId = res.data.id;
 
-      // Auto First Comment if specified
       if (postData.firstComment && videoId) {
         try {
           await axios.post(`${GRAPH_URL}/${videoId}/comments`, null, {
-            params: {
-              message: postData.firstComment,
-              access_token: accessToken
-            }
+            params: { message: postData.firstComment, access_token: accessToken }
           });
-        } catch (commentErr) {
-          console.warn('Facebook Video Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
-        }
+        } catch (e) {}
       }
 
       return {
@@ -173,6 +233,62 @@ export async function publishToFacebook(pageAccount, postData) {
       success: false,
       error: `Facebook Error: ${errorDetails}`
     };
+  }
+}
+
+/**
+ * Verify Access Token Status
+ */
+export async function checkTokenHealth(accessToken) {
+  try {
+    const res = await axios.get(`${GRAPH_URL}/me`, {
+      params: {
+        fields: 'id,name',
+        access_token: accessToken
+      }
+    });
+    if (res.data && res.data.id) {
+      return { valid: true, id: res.data.id, name: res.data.name };
+    }
+    return { valid: false, error: 'Phản hồi từ Facebook không hợp lệ' };
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    return { valid: false, error: msg };
+  }
+}
+
+/**
+ * Fetch Page Roles / Administrators
+ */
+export async function getPageRoles(pageId, accessToken) {
+  try {
+    const res = await axios.get(`${GRAPH_URL}/${pageId}/roles`, {
+      params: { access_token: accessToken }
+    });
+    return res.data?.data || [];
+  } catch (err) {
+    console.warn('Fetch Page Roles warning:', err.response?.data || err.message);
+    return [];
+  }
+}
+
+/**
+ * Invite / Assign Role to a Facebook user for a Page
+ */
+export async function assignPageRole(pageId, userEmailOrId, role, accessToken) {
+  try {
+    const validRoles = ['ADMINISTER', 'EDIT_PROFILE', 'CREATE_CONTENT', 'MODERATE_COMMENTS', 'ADMIN'];
+    const res = await axios.post(`${GRAPH_URL}/${pageId}/roles`, null, {
+      params: {
+        user: userEmailOrId,
+        role: role || 'CREATE_CONTENT',
+        access_token: accessToken
+      }
+    });
+    return { success: true, data: res.data };
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    throw new Error(`Lỗi mời Vai trò Fanpage: ${msg}`);
   }
 }
 

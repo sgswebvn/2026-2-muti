@@ -92,12 +92,32 @@ class LocalDB {
     this.read();
     const existingIdx = this.data.accounts.findIndex(a => a.id === account.id && a.platform === account.platform);
     if (existingIdx >= 0) {
-      this.data.accounts[existingIdx] = { ...this.data.accounts[existingIdx], ...account, updatedAt: new Date().toISOString() };
+      this.data.accounts[existingIdx] = { 
+        group: 'Mặc định',
+        ...this.data.accounts[existingIdx], 
+        ...account, 
+        updatedAt: new Date().toISOString() 
+      };
     } else {
-      this.data.accounts.push({ ...account, createdAt: new Date().toISOString() });
+      this.data.accounts.push({ 
+        group: 'Mặc định',
+        ...account, 
+        createdAt: new Date().toISOString() 
+      });
     }
     this.write();
     return this.data.accounts;
+  }
+
+  updateAccountGroup(id, platform, group) {
+    this.read();
+    const acc = (this.data.accounts || []).find(a => a.id === id && a.platform === platform);
+    if (acc) {
+      acc.group = group || 'Mặc định';
+      acc.updatedAt = new Date().toISOString();
+      this.write();
+    }
+    return acc;
   }
 
   deleteAccount(id, platform) {
@@ -121,9 +141,10 @@ class LocalDB {
       hashtags: post.hashtags || '',
       firstComment: post.firstComment || '',
       mediaUrl: post.mediaUrl || '',
+      mediaUrls: Array.isArray(post.mediaUrls) ? post.mediaUrls : (post.mediaUrl ? [post.mediaUrl] : []),
       mediaType: post.mediaType || 'image', // 'image' | 'video'
       postFormat: post.postFormat || 'standard', // 'standard' | 'reel'
-      platforms: post.platforms || ['facebook', 'instagram', 'threads'],
+      platforms: post.platforms || ['facebook'],
       targetAccountIds: post.targetAccountIds || [],
       status: post.scheduledAt ? 'scheduled' : 'draft', // 'draft' | 'scheduled' | 'publishing' | 'published' | 'failed'
       scheduledAt: post.scheduledAt || null,
@@ -140,10 +161,25 @@ class LocalDB {
     this.read();
     const post = this.data.posts.find(p => p.id === id);
     if (post) {
+      if (updates.mediaUrls && Array.isArray(updates.mediaUrls)) {
+        updates.mediaUrl = updates.mediaUrls[0] || '';
+      }
       Object.assign(post, updates, { updatedAt: new Date().toISOString() });
       this.write();
     }
     return post;
+  }
+
+  updateAccountStatus(id, platform, tokenStatus, tokenError = null) {
+    this.read();
+    const acc = (this.data.accounts || []).find(a => a.id === id && a.platform === platform);
+    if (acc) {
+      acc.tokenStatus = tokenStatus; // 'active' | 'invalid' | 'expired'
+      acc.tokenError = tokenError;
+      acc.lastCheckedAt = new Date().toISOString();
+      this.write();
+    }
+    return acc;
   }
 
   deletePost(id) {
