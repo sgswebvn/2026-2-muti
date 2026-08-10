@@ -8,7 +8,7 @@ import { exchangeForLongLivedToken, getFacebookPages } from './services/accountS
 import { executePostPublish } from './services/postPublisher.js';
 import { initScheduler } from './services/scheduler.js';
 import { checkTokenHealth, getPageRoles, assignPageRole, getPostLiveComments, postCommentReply } from './services/facebookService.js';
-import { generateAiContent, suggestAiCommentReply } from './services/aiService.js';
+import { generateAiContent, suggestAiCommentReply, analyzeVideoContent } from './services/aiService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,6 +61,22 @@ initScheduler();
 
 // ==================== SECURITY & AUTH API ==================== //
 
+// Check PIN configured status
+app.get('/api/auth/pin-status', (req, res) => {
+  res.json({ success: true, isPinConfigured: db.isPinConfigured() });
+});
+
+// Initial PIN Setup
+app.post('/api/auth/setup-pin', (req, res) => {
+  try {
+    const { newPin } = req.body;
+    db.updatePin(newPin);
+    res.json({ success: true, message: 'Khởi tạo mã PIN bảo mật thành công!' });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // Verify PIN
 app.post('/api/auth/verify-pin', (req, res) => {
   const { pin } = req.body;
@@ -95,9 +111,10 @@ app.get('/api/settings', (req, res) => {
 });
 
 app.post('/api/settings', (req, res) => {
-  const { appId, appSecret, openaiApiKey } = req.body;
-  const settings = db.saveSettings({ appId, appSecret, openaiApiKey });
-  res.json({ success: true, settings });
+  const { appId, appSecret, openaiApiKey, grokApiKey } = req.body;
+  const settings = db.saveSettings({ appId, appSecret, openaiApiKey, grokApiKey });
+  const { securityPin, ...safeSettings } = settings;
+  res.json({ success: true, settings: safeSettings });
 });
 
 // ==================== FACEBOOK ACCOUNTS & ROLES API ==================== //
@@ -149,39 +166,47 @@ app.put('/api/accounts/:platform/:id/group', (req, res) => {
   try {
     const { platform, id } = req.params;
     const { group } = req.body;
-    const account = db.updateAccountGroup(id, platform, group);
-    res.json({ success: true, account, accounts: db.getAccounts() });
+    const acc = db.updateAccountGroup(id, platform, group);
+    res.json({ success: true, account: acc });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/accounts/check-tokens', async (req, res) => {
+app.delete('/api/accounts/:platform/:id', (req, res) => {
   try {
-    const accounts = db.getAccounts();
-    const results = [];
-
-    for (const acc of accounts) {
-      if (acc.accessToken) {
-        const health = await checkTokenHealth(acc.accessToken);
-        db.updateAccountStatus(acc.id, acc.platform, health.valid ? 'active' : 'invalid', health.error || null);
-        results.push({ id: acc.id, name: acc.name, ...health });
-      }
-    }
-
-    res.json({ success: true, results, accounts: db.getAccounts() });
+    const { platform, id } = req.params;
+    const accounts = db.deleteAccount(id, platform);
+    res.json({ success: true, accounts });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+app.post('/api/accounts/:platform/:id/check-token', async (req, res) => {
+  try {
+    const { platform, id } = req.params;
+    const accounts = db.getAccounts();
+    const account = accounts.find(a => a.id === id && a.platform === platform);
+    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản.' });
+
+    const statusResult = await checkTokenHealth(account);
+    const updatedAcc = db.updateAccountStatus(id, platform, statusResult.status, statusResult.error);
+    res.json({ success: true, account: updatedAcc, health: statusResult });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Page Roles API
 app.get('/api/accounts/:id/roles', async (req, res) => {
   try {
     const { id } = req.params;
-    const account = db.getAccounts().find(a => a.id === id);
-    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản.' });
+    const accounts = db.getAccounts();
+    const account = accounts.find(a => a.id === id && a.platform === 'facebook');
+    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
 
-    const roles = await getPageRoles(id, account.accessToken);
+    const roles = await getPageRoles(account);
     res.json({ success: true, roles });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -191,67 +216,70 @@ app.get('/api/accounts/:id/roles', async (req, res) => {
 app.post('/api/accounts/:id/roles', async (req, res) => {
   try {
     const { id } = req.params;
-    const { user, role } = req.body;
-    const account = db.getAccounts().find(a => a.id === id);
-    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản.' });
+    const { userEmail, role } = req.body;
+    const accounts = db.getAccounts();
+    const account = accounts.find(a => a.id === id && a.platform === 'facebook');
+    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
 
-    const result = await assignPageRole(id, user, role, account.accessToken);
-    res.json({ success: true, result });
+    const result = await assignPageRole(account, userEmail, role);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.delete('/api/accounts/:platform/:id', (req, res) => {
-  const { platform, id } = req.params;
-  const accounts = db.deleteAccount(id, platform);
-  res.json({ success: true, accounts });
-});
+// ==================== MEDIA UPLOADS API ==================== //
 
-// ==================== MEDIA UPLOAD & POSTS API ==================== //
-
-// Supports single or multiple file uploads (up to 10 files)
 app.post('/api/upload', upload.array('media', 10), (req, res) => {
-  const files = req.files || (req.file ? [req.file] : []);
-  if (files.length === 0) {
-    return res.status(400).json({ success: false, error: 'Không nhận được file.' });
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: 'Không có tệp media nào được tải lên.' });
+    }
+
+    const fileUrls = req.files.map(f => `/uploads/${f.filename}`);
+    const firstMime = req.files[0].mimetype;
+    const mediaType = firstMime.startsWith('video/') ? 'video' : 'image';
+
+    res.json({
+      success: true,
+      mediaUrls: fileUrls,
+      fileUrl: fileUrls[0],
+      mediaType: mediaType
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
-
-  const host = req.get('host');
-  const protocol = req.protocol;
-  const uploadedMedia = files.map(file => {
-    const isVideo = file.mimetype.startsWith('video');
-    return {
-      fileUrl: `${protocol}://${host}/uploads/${file.filename}`,
-      filename: file.filename,
-      mediaType: isVideo ? 'video' : 'image',
-      size: file.size
-    };
-  });
-
-  res.json({
-    success: true,
-    fileUrl: uploadedMedia[0].fileUrl,
-    filename: uploadedMedia[0].filename,
-    mediaType: uploadedMedia[0].mediaType,
-    mediaUrls: uploadedMedia.map(m => m.fileUrl),
-    files: uploadedMedia
-  });
 });
+
+// ==================== POSTS & PUBLISHING API ==================== //
 
 app.get('/api/posts', (req, res) => {
   res.json({ success: true, posts: db.getPosts() });
 });
 
-app.post('/api/posts', async (req, res) => {
+app.post('/api/posts', (req, res) => {
   try {
-    const { title, caption, hashtags, firstComment, mediaUrl, mediaUrls, mediaType, postFormat, targetAccountIds, scheduledAt, publishNow } = req.body;
+    const { 
+      title, 
+      caption, 
+      hashtags, 
+      firstComment, 
+      autoReplyMessage,
+      mediaUrl, 
+      mediaUrls, 
+      mediaType, 
+      postFormat,
+      targetAccountIds, 
+      publishNow, 
+      scheduledAt 
+    } = req.body;
 
     const newPost = db.createPost({
       title,
       caption,
       hashtags,
       firstComment,
+      autoReplyMessage,
       mediaUrl,
       mediaUrls,
       mediaType,
@@ -299,11 +327,20 @@ app.delete('/api/posts/:id', (req, res) => {
   res.json({ success: true, posts });
 });
 
-// ==================== AI GENERATOR API ==================== //
+// ==================== AI GENERATOR & VIDEO ANALYSIS API ==================== //
 
 app.post('/api/ai/generate', async (req, res) => {
   try {
     const result = await generateAiContent(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ai/analyze-video', async (req, res) => {
+  try {
+    const result = await analyzeVideoContent(req.body);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -323,7 +360,6 @@ app.post('/api/ai/suggest-reply', async (req, res) => {
 
 // ==================== LIVE COMMENTS & REPLY MANAGEMENT API ==================== //
 
-// Get Live Comments for a Published Post
 app.get('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
   try {
     const { accId, postId } = req.params;
@@ -337,11 +373,10 @@ app.get('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
   }
 });
 
-// Post Reply or New Comment as Page
 app.post('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
   try {
     const { accId } = req.params;
-    const { targetId, message } = req.body; // targetId can be postId or commentId
+    const { targetId, message } = req.body;
     const account = db.getAccounts().find(a => a.id === accId);
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
     if (!message || !message.trim()) return res.status(400).json({ success: false, error: 'Bình luận không được để trống.' });

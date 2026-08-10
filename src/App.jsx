@@ -104,6 +104,7 @@ export default function App() {
           <AiContentGenerator 
             accounts={accounts}
             onSendToPublisher={handleSendAiToPublisher}
+            onOpenGuide={() => setIsGuideOpen(true)}
             onPostCreated={() => {
               fetchPosts();
               changeTab('history');

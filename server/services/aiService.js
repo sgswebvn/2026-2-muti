@@ -1,106 +1,182 @@
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../db.js';
+import { getPublicMediaUrl } from './tunnelService.js';
 
 /**
- * Generate Social Media Content & Real AI Image directly
- * @param {Object} options { prompt, imagePrompt, topic, tone }
+ * Legacy compatibility wrapper for AI Content Generation
  */
 export async function generateAiContent(options = {}) {
-  const { 
-    prompt = '', 
-    imagePrompt = '',
-    topic = 'Khuyến mãi bán hàng',
-    tone = 'Hấp dẫn' 
-  } = options;
+  return analyzeVideoContent(options);
+}
 
+/**
+ * Helper to convert video relative URL to local file path
+ */
+function getLocalFilePath(mediaUrl) {
+  if (!mediaUrl) return null;
+  if (mediaUrl.includes('/uploads/')) {
+    const filename = mediaUrl.split('/uploads/').pop();
+    const filePath = path.resolve('uploads', filename);
+    if (fs.existsSync(filePath)) {
+      return filePath;
+    }
+  }
+  return null;
+}
+
+/**
+ * Analyze Video Upload using Super Grok 4.5 / Grok Vision or ChatGPT (OpenAI)
+ * Returns English Title, concise English Video Analysis Summary, and Hashtags
+ * @param {Object} options { videoUrl, videoPrompt, model: 'grok' | 'chatgpt' }
+ */
+export async function analyzeVideoContent(options = {}) {
+  const { videoUrl = '', videoPrompt = '', model = 'grok' } = options;
   const settings = db.getSettings();
-  const apiKey = settings.openaiApiKey || process.env.OPENAI_API_KEY;
+  const grokApiKey = (settings.grokApiKey || process.env.GROK_API_KEY || '').trim();
+  const openaiApiKey = (settings.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
+  const filename = videoUrl ? videoUrl.split('/').pop() : 'Uploaded Video';
 
-  const userPrompt = prompt.trim() || `Viết bài đăng Facebook chuyên nghiệp về: "${topic}". Tông giọng ${tone}.`;
-  let apiErrorNotice = null;
+  console.log(`[AI Service] Analyzing video "${filename}" using model: "${model}". Grok Key present: ${Boolean(grokApiKey)}, OpenAI Key present: ${Boolean(openaiApiKey)}`);
 
-  // 1. Text Generation (ChatGPT API or Smart Fallback)
-  if (apiKey && apiKey.trim()) {
+  // Obtain public or local file path
+  let publicUrl = videoUrl;
+  try {
+    if (videoUrl.includes('/uploads/')) {
+      publicUrl = await getPublicMediaUrl(videoUrl);
+    }
+  } catch (e) { }
+
+  // ================= 1. MODEL: Super Grok (xAI API) ================= //
+  if (model === 'grok') {
+    if (!grokApiKey) {
+      return {
+        success: false,
+        error: 'Chưa cấu hình Grok API Key! Vui lòng bấm vào nút "Cấu Hình API Keys" và dán mã Key từ console.x.ai vào.'
+      };
+    }
+
+    // List of models to try in order of preference
+    const grokModels = ['grok-2-vision-1212', 'grok-2-latest', 'grok-4.5'];
+    let lastError = null;
+
+    for (const modelName of grokModels) {
+      try {
+        console.log(`[Grok API] Requesting completion with model: ${modelName}...`);
+
+        const systemPrompt = 'You are Super Grok 4.5 AI Video Intelligence. Analyze the video file metadata and context. Return ONLY raw valid JSON format (no markdown blocks or backticks): {"englishTitle": "Catchy short English title for social post", "summaryAnalysis": "Concise 2-3 sentence English video summary content for post caption.", "hashtags": "#ViralVideo #SuperGrok"}';
+        const userPromptText = `Video File: ${filename}\nPublic/Local URL: ${publicUrl}\nUser Instructions: ${videoPrompt || 'Analyze video content and generate engaging viral English title & caption summary.'}`;
+
+        // Construct vision payload if public URL exists
+        const userContent = publicUrl.startsWith('http') && (modelName.includes('vision') || modelName.includes('2'))
+          ? [
+            { type: 'text', text: userPromptText },
+            { type: 'image_url', image_url: { url: publicUrl } }
+          ]
+          : userPromptText;
+
+        const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+          model: modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent }
+          ],
+          temperature: 0.5
+        }, {
+          headers: {
+            'Authorization': `Bearer ${grokApiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 45000
+        });
+
+        const contentText = response.data.choices[0]?.message?.content;
+        console.log(`[Grok API Success] Raw response from ${modelName}:`, contentText);
+
+        const cleanJsonStr = contentText.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleanJsonStr);
+
+        return {
+          success: true,
+          source: `Super Grok AI (xAI ${modelName})`,
+          englishTitle: parsed.englishTitle || `🔥 ${filename.split('.')[0].toUpperCase()} - Official Clip`,
+          summaryAnalysis: parsed.summaryAnalysis || 'Extracted video content highlights key features for maximum social engagement.',
+          hashtags: parsed.hashtags || '#SuperGrok #ViralVideo #Trending'
+        };
+
+      } catch (err) {
+        const errorDetail = err.response?.data?.error?.message || err.response?.data?.error || err.message;
+        console.warn(`[Grok API Warning] Model ${modelName} failed:`, errorDetail);
+        lastError = errorDetail;
+      }
+    }
+
+    // If all Grok model attempts failed, return the exact API error instead of hiding it!
+    return {
+      success: false,
+      error: `Lỗi kết nối xAI Grok API: ${lastError || 'Không thể kết nối đến máy chủ xAI'}. Vui lòng kiểm tra lại Grok API Key của bạn.`
+    };
+  }
+
+  // ================= 2. MODEL: ChatGPT (OpenAI) ================= //
+  if (model === 'chatgpt') {
+    if (!openaiApiKey) {
+      return {
+        success: false,
+        error: 'Chưa cấu hình OpenAI API Key! Vui lòng dán mã sk-... Key vào ô cài đặt.'
+      };
+    }
+
     try {
+      console.log('[ChatGPT API] Requesting video analysis completion with gpt-4o-mini...');
+
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
-            content: 'Bạn là trợ lý AI sáng tạo nội dung bài đăng Facebook. Hãy đọc yêu cầu (prompt) của người dùng và tạo ra bài viết bằng tiếng Việt. Trả về ĐÚNG 1 ĐỊNH DẠNG JSON duy nhất (không bọc trong markdown codeblock) có các trường: {"title": "Tiêu đề", "caption": "Nội dung chi tiết bài viết", "hashtags": "#hashtag1 #hashtag2", "firstComment": "Bình luận đầu tiên", "imagePrompt": "Mô tả ảnh sắc nét bằng tiếng Anh cho AI vẽ"}'
+            content: 'You are ChatGPT Video Intelligence. Analyze video context and generate: 1) English Title, 2) English short summary analysis, 3) Hashtags. Output ONLY raw valid JSON (no markdown): {"englishTitle": "...", "summaryAnalysis": "...", "hashtags": "#ChatGPT #Video"}'
           },
           {
             role: 'user',
-            content: `Yêu cầu tạo bài viết: ${userPrompt}\nGợi ý ảnh (nếu có): ${imagePrompt}`
+            content: `Video file: ${filename}\nVideo URL: ${publicUrl}\nContext: ${videoPrompt || 'Analyze video'}`
           }
         ],
-        temperature: 0.7
+        temperature: 0.5
       }, {
         headers: {
-          'Authorization': `Bearer ${apiKey.trim()}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json'
-        }
+        },
+        timeout: 45000
       });
 
       const contentText = response.data.choices[0]?.message?.content;
-      resultData = JSON.parse(contentText.replace(/```json|```/g, '').trim());
-      source = 'ChatGPT API (OpenAI gpt-4o-mini)';
+      console.log('[ChatGPT API Success] Raw response:', contentText);
+
+      const parsed = JSON.parse(contentText.replace(/```json|```/g, '').trim());
+
+      return {
+        success: true,
+        source: 'ChatGPT (OpenAI gpt-4o-mini)',
+        englishTitle: parsed.englishTitle || 'Featured Video Highlight',
+        summaryAnalysis: parsed.summaryAnalysis || 'The video presents engaging visual highlights optimized for viewer interaction.',
+        hashtags: parsed.hashtags || '#ChatGPT #SocialMedia #Viral'
+      };
     } catch (err) {
-      apiErrorNotice = err.response?.data?.error?.message || err.message;
-      console.warn('OpenAI API Error, falling back to Smart AI Generator:', apiErrorNotice);
+      const errorDetail = err.response?.data?.error?.message || err.message;
+      console.error('[ChatGPT API Error]:', errorDetail);
+      return {
+        success: false,
+        error: `Lỗi kết nối OpenAI ChatGPT API: ${errorDetail}`
+      };
     }
   }
-
-  if (!resultData) {
-    resultData = {
-      title: `🔥 [ChatGPT Content] ${userPrompt.substring(0, 40)}...`,
-      caption: `✨ NỘI DUNG TỰ ĐỘNG CHUẨN CHATGPT ✨\n\nNội dung bài viết được sinh ra theo prompt của bạn: "${userPrompt}"\n\n🔹 Điểm nổi bật và giá trị cốt lõi\n🔹 Ưu đãi và lời kêu gọi hành động (Call to action)\n\n👉 Nhắn tin ngay để nhận tư vấn chi tiết!`,
-      hashtags: '#ChatGPT #ContentMarketing #SocialMedia #Viral',
-      firstComment: '👉 Liên hệ ngay hoặc để lại bình luận bên dưới để nhận thêm thông tin chi tiết!',
-      imagePrompt: imagePrompt || `High quality professional social media poster graphics about ${userPrompt.substring(0, 30)}`
-    };
-  }
-
-  // 2. Real AI Image Generation (DALL-E 3 or Free High-Quality Flux/StableDiffusion Engine)
-  const finalImagePrompt = resultData.imagePrompt || imagePrompt || userPrompt;
-  let generatedImageUrl = '';
-
-  // Try DALL-E 3 first if OpenAI API key is set
-  if (apiKey) {
-    try {
-      const imgRes = await axios.post('https://api.openai.com/v1/images/generations', {
-        model: 'dall-e-3',
-        prompt: finalImagePrompt,
-        n: 1,
-        size: '1024x1024'
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (imgRes.data?.data?.[0]?.url) {
-        generatedImageUrl = imgRes.data.data[0].url;
-      }
-    } catch (e) {
-      console.warn('DALL-E 3 API Notice (Falling back to Free High-Speed AI Image Generator):', e.message);
-    }
-  }
-
-  // Fallback to Free Unlimited High-Speed AI Image Engine (Pollinations AI Flux)
-  if (!generatedImageUrl) {
-    const seed = Math.floor(Math.random() * 1000000);
-    const cleanPrompt = encodeURIComponent(finalImagePrompt);
-    generatedImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=1024&height=1024&nologo=true&seed=${seed}`;
-  }
-
-  resultData.mediaUrl = generatedImageUrl;
 
   return {
-    success: true,
-    source: source,
-    apiErrorNotice: apiErrorNotice,
-    data: resultData
+    success: false,
+    error: 'Vui lòng lựa chọn model AI hợp lệ (Super Grok hoặc ChatGPT).'
   };
 }
 
@@ -109,9 +185,36 @@ export async function generateAiContent(options = {}) {
  */
 export async function suggestAiCommentReply(customerComment, postTopic = '') {
   const settings = db.getSettings();
-  const apiKey = settings.openaiApiKey || process.env.OPENAI_API_KEY;
+  const grokApiKey = (settings.grokApiKey || process.env.GROK_API_KEY || '').trim();
+  const openaiApiKey = (settings.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
 
-  if (apiKey && apiKey.trim()) {
+  if (grokApiKey) {
+    try {
+      const response = await axios.post('https://api.x.ai/v1/chat/completions', {
+        model: 'grok-2-latest',
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là chuyên viên chăm sóc khách hàng Super Grok. Hãy tạo 1 câu trả lời bình luận ngắn gọn, lịch sự, thân thiện và mời khách hàng kiểm tra Inbox.'
+          },
+          {
+            role: 'user',
+            content: `Khách hàng bình luận: "${customerComment}"\nChủ đề: "${postTopic}"`
+          }
+        ],
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${grokApiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const text = response.data.choices[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch (e) { }
+  }
+
+  if (openaiApiKey) {
     try {
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
         model: 'gpt-4o-mini',
@@ -128,15 +231,14 @@ export async function suggestAiCommentReply(customerComment, postTopic = '') {
         temperature: 0.7
       }, {
         headers: {
-          'Authorization': `Bearer ${apiKey.trim()}`,
+          'Authorization': `Bearer ${openaiApiKey}`,
           'Content-Type': 'application/json'
         }
       });
       const text = response.data.choices[0]?.message?.content?.trim();
       if (text) return text;
-    } catch (e) {}
+    } catch (e) { }
   }
 
-  // Fallback smart AI replies
   return `Dạ chào bạn! Shop đã gửi thông tin chi tiết và ưu đãi dành riêng cho bạn vào hộp thư tin nhắn rồi ạ. Bạn kiểm tra giúp shop nhé!`;
 }

@@ -31,7 +31,7 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai')}
         >
-          <span>AI Content Studio</span>
+          <span>📹 Phân Tích Video AI</span>
         </button>
 
         <button

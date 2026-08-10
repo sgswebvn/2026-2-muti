@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Calendar, Clock, Send, CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromAi, onPostCreated }) {
   const fbAccounts = accounts.filter(a => a.platform === 'facebook');
@@ -38,8 +39,11 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
       if (draftFromAi.firstComment) setFirstComment(draftFromAi.firstComment);
       if (draftFromAi.mediaUrls && draftFromAi.mediaUrls.length > 0) {
         setMediaUrls(draftFromAi.mediaUrls);
+        if (draftFromAi.mediaUrls[0]?.match(/\.(mp4|mov|webm|avi|m4v)$/i)) {
+          setMediaType('video');
+        }
       }
-      setNotice({ type: 'success', text: 'Đã điền nội dung từ ChatGPT vào bài đăng. Bạn có thể kiểm tra lại trước khi bấm Đăng.' });
+      setNotice({ type: 'success', text: 'Đã điền nội dung từ AI vào bài đăng. Hãy kiểm tra trước khi bấm Đăng.' });
       if (onClearDraftFromAi) onClearDraftFromAi();
     }
   }, [draftFromAi]);
@@ -98,8 +102,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         const newUrls = data.mediaUrls || [data.fileUrl];
         setMediaUrls(prev => [...prev, ...newUrls]);
         setMediaType(data.mediaType || 'image');
+        setNotice({ type: 'success', text: `Đã tải lên ${newUrls.length} file media thành công.` });
       } else {
-        throw new Error(data.error || 'Tải file thất bại');
+        throw new Error(data.error || 'Tải media lên thất bại');
       }
     } catch (err) {
       setNotice({ type: 'error', text: err.message });
@@ -108,65 +113,82 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     }
   };
 
-  const removeMediaUrl = (indexToRemove) => {
-    setMediaUrls(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  const removeMediaUrl = (index) => {
+    setMediaUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Quick Preset Helper for Schedule Time
+  const setQuickSchedule = (minutesFromNow) => {
+    const futureDate = new Date(Date.now() + minutesFromNow * 60 * 1000);
+    // Format to YYYY-MM-DDTHH:mm
+    const tzOffset = futureDate.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(futureDate - tzOffset)).toISOString().slice(0, 16);
+    setScheduledAt(localISOTime);
+    setPostMode('schedule');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    if (!caption.trim() && mediaUrls.length === 0) {
-      setNotice({ type: 'error', text: 'Vui lòng nhập nội dung bài viết hoặc tải lên hình ảnh / video.' });
-      return;
-    }
-
     if (selectedPageIds.length === 0) {
       setNotice({ type: 'error', text: 'Vui lòng chọn ít nhất 1 Fanpage Facebook để đăng bài.' });
       return;
+    }
+    if (!caption.trim()) {
+      setNotice({ type: 'error', text: 'Nội dung bài viết không được để trống.' });
+      return;
+    }
+
+    if (postMode === 'schedule') {
+      if (!scheduledAt) {
+        setNotice({ type: 'error', text: 'Vui lòng chọn ngày và giờ lên lịch đăng bài.' });
+        return;
+      }
+      const schDate = new Date(scheduledAt);
+      if (schDate <= new Date()) {
+        setNotice({ type: 'error', text: 'Thời gian lên lịch phải ở tương lai.' });
+        return;
+      }
     }
 
     setPublishing(true);
     setNotice(null);
 
     try {
-      const payload = {
-        title,
-        caption,
-        hashtags,
-        firstComment,
-        autoReplyMessage,
-        mediaUrl: mediaUrls[0] || '',
-        mediaUrls: mediaUrls,
-        mediaType,
-        platforms: ['facebook'],
-        targetAccountIds: selectedPageIds,
-        scheduledAt: postMode === 'schedule' ? scheduledAt : null,
-        publishNow: postMode === 'now'
-      };
-
       const res = await fetch('/api/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          title,
+          caption,
+          hashtags,
+          firstComment,
+          autoReplyMessage,
+          mediaUrl: mediaUrls[0] || '',
+          mediaUrls,
+          mediaType,
+          postFormat: mediaType === 'video' ? 'reel' : 'standard',
+          targetAccountIds: selectedPageIds,
+          publishNow: postMode === 'now',
+          scheduledAt: postMode === 'schedule' ? new Date(scheduledAt).toISOString() : null
+        })
       });
 
       const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Lỗi khi tạo bài viết');
+      if (data.success) {
+        setNotice({ 
+          type: 'success', 
+          text: postMode === 'now' 
+            ? 'Đã gửi lệnh đăng bài tới các Fanpage! Bài viết đang được xử lý.' 
+            : `Đã lên lịch đăng bài thành công vào lúc ${new Date(scheduledAt).toLocaleString('vi-VN')}!` 
+        });
 
-      setNotice({
-        type: 'success',
-        text: postMode === 'now' 
-          ? `Bài viết đã xuất bản thành công lên ${selectedPageIds.length} Fanpage Facebook!`
-          : 'Bài viết đã được thêm vào lịch trình tự động đăng!'
-      });
-
-      // Reset Form
-      setTitle('');
-      setCaption('');
-      setFirstComment('');
-      setMediaUrls([]);
-      if (onPostCreated) onPostCreated();
-
+        // Reset form after 1.2s
+        setTimeout(() => {
+          if (onPostCreated) onPostCreated();
+        }, 1200);
+      } else {
+        throw new Error(data.error || 'Có lỗi xảy ra khi tạo bài viết.');
+      }
     } catch (err) {
       setNotice({ type: 'error', text: err.message });
     } finally {
@@ -176,7 +198,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
 
   return (
     <div className="grid-2" style={{ alignItems: 'start' }}>
-      {/* LEFT: Clean Form */}
+      {/* LEFT: Composer Form */}
       <div className="glass-card" style={{ padding: '24px' }}>
         <h2 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '16px' }}>
           Soạn Bài Đăng Fanpage
@@ -189,7 +211,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* SECTION 1: FANPAGE SELECTION AT THE VERY TOP (VISUAL & INTUITIVE) */}
+          {/* SECTION 1: FANPAGE SELECTION */}
           <div 
             style={{ 
               background: '#0f172a', 
@@ -219,7 +241,6 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               </button>
             </div>
 
-            {/* Quick Group Tabs (Chọn Theo Nhóm Chủ Đề) */}
             {groupsList.length > 0 && (
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
                 <button
@@ -244,10 +265,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               </div>
             )}
 
-            {/* Visual Fanpage Cards Grid */}
             {fbAccounts.length === 0 ? (
               <div style={{ fontSize: '0.85rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '6px' }}>
-                Chưa có Fanpage nào kết nối. Hãy sang tab Fanpage & Roles để kết nối tài khoản.
+                Chưa có Fanpage nào kết nối. Hãy sang tab Quản Lý Tài Khoản để dán Access Token kết nối.
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '160px', overflowY: 'auto' }}>
@@ -273,7 +293,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                       <input 
                         type="checkbox" 
                         checked={isSelected}
-                        onChange={() => {}} // Handled by parent div onClick
+                        onChange={() => {}}
                         style={{ cursor: 'pointer' }}
                       />
                       {acc.avatar ? (
@@ -298,48 +318,43 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             )}
           </div>
 
-          {/* SECTION 2: CLEAN POST CONTENT FIELDS */}
-
-          {/* Title */}
+          {/* SECTION 2: POST CONTENT FIELDS */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
-            <label className="form-label">Tiêu Đề</label>
+            <label className="form-label">Tiêu Đề Bài Viết</label>
             <input 
               type="text" 
               className="input-field"
-              placeholder="Nhập tiêu đề..."
+              placeholder="Nhập tiêu đề (Ví dụ: Super Grok English Title / Tiêu đề bán hàng)..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
 
-          {/* Caption Textarea */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
-            <label className="form-label">Nội Dung Bài Viết</label>
+            <label className="form-label">Nội Dung Bài Viết (*)</label>
             <textarea 
               className="input-field" 
               rows={6}
-              placeholder="Nhập nội dung bài đăng..."
+              placeholder="Nhập nội dung chi tiết bài đăng..."
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
               required
             />
           </div>
 
-          {/* Hashtags */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
             <label className="form-label">Hashtags</label>
             <input 
               type="text" 
               className="input-field"
-              placeholder="#hashtag1 #hashtag2"
+              placeholder="#facebook #viral #marketing"
               value={hashtags}
               onChange={(e) => setHashtags(e.target.value)}
             />
           </div>
 
-          {/* Multi-line Auto Seeding Comments */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
-            <label className="form-label">Tự Động Seeding Bình Luận (Nhập nhiều bình luận, mỗi câu 1 dòng)</label>
+            <label className="form-label">Tự Động Seeding Bình Luận (Mỗi câu 1 dòng)</label>
             <textarea 
               className="textarea-field"
               rows={3}
@@ -349,7 +364,6 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             />
           </div>
 
-          {/* Auto Rep Comment Template */}
           <div className="form-group" style={{ marginBottom: '14px' }}>
             <label className="form-label">Cài Đặt Trả Lời Tự Động Khi Khách Bình Luận (Auto Rep Comment)</label>
             <input 
@@ -361,9 +375,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             />
           </div>
 
-          {/* Multiple Image / Video Upload */}
+          {/* SECTION 3: MEDIA UPLOAD */}
           <div className="form-group" style={{ marginBottom: '16px' }}>
-            <label className="form-label">Hình Ảnh / Video</label>
+            <label className="form-label">Hình Ảnh / Video Tệp Đính Kèm</label>
 
             <div 
               style={{
@@ -378,7 +392,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               onClick={() => document.getElementById('multi-file-input').click()}
             >
               <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                {uploading ? 'Đang tải media lên...' : 'Bấm để chọn 1 hoặc nhiều ảnh / video'}
+                {uploading ? 'Đang tải media lên máy chủ...' : 'Bấm để chọn 1 hoặc nhiều ảnh / video'}
               </div>
               <input 
                 id="multi-file-input"
@@ -390,7 +404,6 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               />
             </div>
 
-            {/* Media Preview Grid */}
             {mediaUrls.length > 0 && (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
                 {mediaUrls.map((url, idx) => (
@@ -438,14 +451,14 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             )}
           </div>
 
-          {/* Mode Switcher & Submit */}
+          {/* SECTION 4: MODE SWITCHER & SCHEDULING PRESETS */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
             <button 
               type="button" 
               className={`btn ${postMode === 'now' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setPostMode('now')}
             >
-              Đăng Ngay
+              🚀 Đăng Bài Ngay
             </button>
 
             <button 
@@ -453,30 +466,51 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               className={`btn ${postMode === 'schedule' ? 'btn-primary' : 'btn-secondary'}`}
               onClick={() => setPostMode('schedule')}
             >
-              Lên Lịch Đăng Bài
+              📅 Lên Lịch Đăng Bài
             </button>
           </div>
 
           {postMode === 'schedule' && (
-            <div className="form-group" style={{ marginBottom: '14px' }}>
-              <label className="form-label">Chọn Ngày & Giờ Xuất Bản</label>
+            <div style={{ background: '#0f172a', padding: '16px', borderRadius: '10px', border: '1px solid #3b82f6', marginBottom: '16px' }}>
+              <label className="form-label" style={{ color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Clock size={16} /> Chọn Ngày & Giờ Xuất Bản Chi Tiết
+              </label>
+
               <input 
                 type="datetime-local" 
                 className="input-field"
+                style={{ marginBottom: '10px' }}
                 value={scheduledAt}
                 onChange={(e) => setScheduledAt(e.target.value)}
                 required
               />
+
+              {/* Quick Preset Buttons */}
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '6px' }}>Gợi ý nhanh:</div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }} onClick={() => setQuickSchedule(2)}>
+                  ⏱️ Thử nghiệm đăng sau +2 phút
+                </button>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }} onClick={() => setQuickSchedule(15)}>
+                  +15 Phút
+                </button>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }} onClick={() => setQuickSchedule(60)}>
+                  +1 Giờ
+                </button>
+                <button type="button" className="btn btn-secondary" style={{ fontSize: '0.75rem', padding: '4px 8px' }} onClick={() => setQuickSchedule(1440)}>
+                  +1 Ngày
+                </button>
+              </div>
             </div>
           )}
 
           <button 
             type="submit" 
             className="btn btn-primary"
-            style={{ width: '100%', padding: '12px', fontSize: '0.95rem', fontWeight: 600 }}
+            style={{ width: '100%', padding: '14px', fontSize: '1rem', fontWeight: 700 }}
             disabled={publishing}
           >
-            {publishing ? 'Đang Xử Lý...' : (postMode === 'now' ? 'Bấm Đăng Bài Ngay' : 'Lưu Lịch Đăng Tự Động')}
+            {publishing ? 'Đang Xử Lý...' : (postMode === 'now' ? '🚀 Bấm Đăng Bài Ngay' : '📅 Lưu Lịch Đăng Tự Động')}
           </button>
         </form>
       </div>
@@ -484,7 +518,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
       {/* RIGHT: Live Preview */}
       <div className="glass-card" style={{ padding: '24px' }}>
         <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '14px' }}>
-          Xem Trước Giao Diện Bài Đăng
+          Xem Trước Giao Diện Bài Đăng Fanpage
         </h3>
 
         <div 
@@ -505,18 +539,20 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>
                 {fbAccounts.length > 0 ? fbAccounts[0].name : 'Tên Fanpage Facebook'}
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Vừa xong · Quản lý đa kênh</div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                {postMode === 'now' ? 'Vừa xong · Quản lý đa kênh' : `Lên lịch xuất bản (${scheduledAt ? new Date(scheduledAt).toLocaleTimeString('vi-VN') : 'chưa chọn giờ'})`}
+              </div>
             </div>
           </div>
 
-          {/* Caption preview (Title prepended) */}
+          {/* Caption preview */}
           <div style={{ fontSize: '0.875rem', lineHeight: '1.5', whiteSpace: 'pre-wrap', marginBottom: '10px' }}>
-            {title && <div style={{ fontWeight: 700, marginBottom: '6px' }}>{title}</div>}
+            {title && <div style={{ fontWeight: 700, marginBottom: '6px', color: '#38bdf8' }}>{title}</div>}
             {caption || 'Nội dung bài viết sẽ hiển thị tại đây...'}
             {hashtags && <div style={{ color: '#60a5fa', marginTop: '6px' }}>{hashtags}</div>}
           </div>
 
-          {/* Media preview (Supports HTML5 Video player or Image grid) */}
+          {/* Media preview */}
           {mediaUrls.length > 0 ? (
             <div 
               style={{ 
@@ -561,7 +597,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           {/* First Comment */}
           {firstComment && (
             <div style={{ marginTop: '10px', paddingTop: '8px', borderTop: '1px solid #334155', fontSize: '0.8rem', color: '#94a3b8' }}>
-              <strong>Bình luận tự động:</strong> {firstComment}
+              <strong>Bình luận tự động seeding:</strong> {firstComment}
             </div>
           )}
         </div>
