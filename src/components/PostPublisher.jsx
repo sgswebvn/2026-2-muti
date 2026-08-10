@@ -7,6 +7,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState('#facebook #viral');
   const [firstComment, setFirstComment] = useState('');
+  const [autoReplyMessage, setAutoReplyMessage] = useState('');
   
   // Media state: supports single or multiple uploaded image/video URLs
   const [mediaUrls, setMediaUrls] = useState([]);
@@ -133,6 +134,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         caption,
         hashtags,
         firstComment,
+        autoReplyMessage,
         mediaUrl: mediaUrls[0] || '',
         mediaUrls: mediaUrls,
         mediaType,
@@ -344,6 +346,18 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               placeholder="VD: Cần tư vấn giá bao nhiêu shop?&#10;Sản phẩm dùng rất thích ạ&#10;Đã nhắn tin cho shop rồi nhé"
               value={firstComment}
               onChange={(e) => setFirstComment(e.target.value)}
+            />
+          </div>
+
+          {/* Auto Rep Comment Template */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Cài Đặt Trả Lời Tự Động Khi Khách Bình Luận (Auto Rep Comment)</label>
+            <input 
+              type="text" 
+              className="input-field"
+              placeholder="VD: Dạ chào bạn! Shop đã gửi thông tin tư vấn chi tiết vào hộp thư tin nhắn rồi ạ."
+              value={autoReplyMessage}
+              onChange={(e) => setAutoReplyMessage(e.target.value)}
             />
           </div>
 

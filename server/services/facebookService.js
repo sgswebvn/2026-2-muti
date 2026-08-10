@@ -41,26 +41,38 @@ async function executeAutoSeedingComments(pageId, targetId, accessToken, firstCo
 
   if (commentLines.length === 0) return;
 
+  // Extract object ID if targetId is in format pageId_objectId
+  const objectIdOnly = targetId.includes('_') ? targetId.split('_').pop() : targetId;
+
   for (const commentText of commentLines) {
+    let success = false;
+    const bodyForm = new URLSearchParams();
+    bodyForm.append('message', commentText);
+    bodyForm.append('access_token', accessToken);
+
+    // Attempt 1: POST /{targetId}/comments
     try {
-      // Primary attempt: POST /{targetId}/comments
-      await axios.post(`${GRAPH_URL}/${targetId}/comments`, null, {
-        params: {
-          message: commentText,
-          access_token: accessToken
-        }
+      await axios.post(`${GRAPH_URL}/${targetId}/comments`, bodyForm, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
+      success = true;
     } catch (err1) {
+      // Attempt 2: POST /{objectIdOnly}/comments
       try {
-        // Fallback attempt: POST /{pageId}_{targetId}/comments
-        await axios.post(`${GRAPH_URL}/${pageId}_${targetId}/comments`, null, {
-          params: {
-            message: commentText,
-            access_token: accessToken
-          }
+        await axios.post(`${GRAPH_URL}/${objectIdOnly}/comments`, bodyForm, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
+        success = true;
       } catch (err2) {
-        console.warn(`Facebook Auto Comment Warning for post ${targetId}:`, err2.response?.data?.error?.message || err2.message);
+        // Attempt 3: POST /{pageId}_{objectIdOnly}/comments
+        try {
+          await axios.post(`${GRAPH_URL}/${pageId}_${objectIdOnly}/comments`, bodyForm, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+          });
+          success = true;
+        } catch (err3) {
+          console.warn(`Facebook Auto Comment Warning for post ${targetId}:`, err3.response?.data?.error?.message || err3.message);
+        }
       }
     }
 
@@ -68,6 +80,51 @@ async function executeAutoSeedingComments(pageId, targetId, accessToken, firstCo
     if (commentLines.length > 1) {
       await new Promise(r => setTimeout(r, 1200));
     }
+  }
+}
+
+/**
+ * Auto Reply to Customer Comments on Published Posts
+ * @param {Object} pageAccount { id, accessToken }
+ * @param {string} postId Facebook Post/Reel ID
+ * @param {string} autoReplyMessage Custom reply template
+ */
+export async function autoReplyCustomerComments(pageAccount, postId, autoReplyMessage) {
+  if (!pageAccount || !postId || !autoReplyMessage) return;
+  const { id: pageId, accessToken } = pageAccount;
+
+  try {
+    // Fetch comments on the post
+    const res = await axios.get(`${GRAPH_URL}/${postId}/comments`, {
+      params: {
+        fields: 'id,message,from,comments{id,from}',
+        access_token: accessToken
+      }
+    });
+
+    const commentsList = res.data?.data || [];
+    for (const comment of commentsList) {
+      // Skip if comment is from the Page itself
+      if (comment.from && comment.from.id === pageId) continue;
+
+      // Check if the page already replied to this comment
+      const existingReplies = comment.comments?.data || [];
+      const alreadyReplied = existingReplies.some(reply => reply.from && reply.from.id === pageId);
+
+      if (!alreadyReplied) {
+        // Post Auto Reply to customer comment
+        const bodyForm = new URLSearchParams();
+        bodyForm.append('message', autoReplyMessage);
+        bodyForm.append('access_token', accessToken);
+
+        await axios.post(`${GRAPH_URL}/${comment.id}/comments`, bodyForm, {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+        console.log(`Auto replied to comment ${comment.id} on post ${postId}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`Auto Reply Comment error for post ${postId}:`, err.response?.data?.error?.message || err.message);
   }
 }
 
