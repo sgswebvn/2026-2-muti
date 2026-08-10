@@ -458,7 +458,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             {hashtags && <div style={{ color: '#60a5fa', marginTop: '6px' }}>{hashtags}</div>}
           </div>
 
-          {/* Media preview */}
+          {/* Media preview (Supports HTML5 Video player or Image grid) */}
           {mediaUrls.length > 0 ? (
             <div 
               style={{ 
@@ -466,19 +466,33 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                 overflow: 'hidden', 
                 background: '#0f172a',
                 display: 'grid',
-                gridTemplateColumns: mediaUrls.length > 1 ? '1fr 1fr' : '1fr',
+                gridTemplateColumns: (mediaUrls.length > 1 && mediaType !== 'video') ? '1fr 1fr' : '1fr',
                 gap: '4px',
-                maxHeight: '300px'
+                maxHeight: '320px'
               }}
             >
-              {mediaUrls.slice(0, 4).map((url, idx) => (
-                <img 
-                  key={idx}
-                  src={url} 
-                  alt="" 
-                  style={{ width: '100%', height: mediaUrls.length > 1 ? '140px' : '260px', objectFit: 'cover' }} 
-                />
-              ))}
+              {mediaUrls.slice(0, 4).map((url, idx) => {
+                const isVideo = mediaType === 'video' || /\.(mp4|mov|webm|avi|m4v)$/i.test(url);
+                return isVideo ? (
+                  <video 
+                    key={idx}
+                    src={url} 
+                    controls 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline
+                    style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', background: '#000' }} 
+                  />
+                ) : (
+                  <img 
+                    key={idx}
+                    src={url} 
+                    alt="" 
+                    style={{ width: '100%', height: mediaUrls.length > 1 ? '140px' : '260px', objectFit: 'cover' }} 
+                  />
+                );
+              })}
             </div>
           ) : (
             <div style={{ height: '120px', borderRadius: '6px', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
