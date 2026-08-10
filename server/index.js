@@ -7,8 +7,8 @@ import { db } from './db.js';
 import { exchangeForLongLivedToken, getFacebookPages } from './services/accountService.js';
 import { executePostPublish } from './services/postPublisher.js';
 import { initScheduler } from './services/scheduler.js';
-import { checkTokenHealth, getPageRoles, assignPageRole } from './services/facebookService.js';
-import { generateAiContent } from './services/aiService.js';
+import { checkTokenHealth, getPageRoles, assignPageRole, getPostLiveComments, postCommentReply } from './services/facebookService.js';
+import { generateAiContent, suggestAiCommentReply } from './services/aiService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -304,6 +304,49 @@ app.delete('/api/posts/:id', (req, res) => {
 app.post('/api/ai/generate', async (req, res) => {
   try {
     const result = await generateAiContent(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// AI Customer Reply Suggestion
+app.post('/api/ai/suggest-reply', async (req, res) => {
+  try {
+    const { comment, postTopic } = req.body;
+    const replyText = await suggestAiCommentReply(comment || '', postTopic || '');
+    res.json({ success: true, replyText });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==================== LIVE COMMENTS & REPLY MANAGEMENT API ==================== //
+
+// Get Live Comments for a Published Post
+app.get('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
+  try {
+    const { accId, postId } = req.params;
+    const account = db.getAccounts().find(a => a.id === accId);
+    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
+
+    const result = await getPostLiveComments(account, postId);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Post Reply or New Comment as Page
+app.post('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
+  try {
+    const { accId } = req.params;
+    const { targetId, message } = req.body; // targetId can be postId or commentId
+    const account = db.getAccounts().find(a => a.id === accId);
+    if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
+    if (!message || !message.trim()) return res.status(400).json({ success: false, error: 'Bình luận không được để trống.' });
+
+    const result = await postCommentReply(account, targetId, message);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

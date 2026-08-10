@@ -124,6 +124,7 @@ export default function App() {
         {activeTab === 'history' && (
           <PostHistory 
             posts={posts} 
+            accounts={accounts}
             fetchPosts={fetchPosts} 
           />
         )}

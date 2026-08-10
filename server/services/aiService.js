@@ -103,3 +103,40 @@ export async function generateAiContent(options = {}) {
     data: resultData
   };
 }
+
+/**
+ * Generate AI Customer Service Reply Suggestion for a Comment
+ */
+export async function suggestAiCommentReply(customerComment, postTopic = '') {
+  const settings = db.getSettings();
+  const apiKey = settings.openaiApiKey || process.env.OPENAI_API_KEY;
+
+  if (apiKey && apiKey.trim()) {
+    try {
+      const response = await axios.post('https://api.openai.com/v1/chat/completions', {
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'Bạn là chuyên viên chăm sóc khách hàng tư vấn bán hàng trên Fanpage Facebook. Hãy tạo 1 câu trả lời bình luận ngắn gọn, lịch sự, thân thiện và mời khách hàng kiểm tra hộp thư tin nhắn (Inbox).'
+          },
+          {
+            role: 'user',
+            content: `Khách hàng bình luận: "${customerComment}"\nChủ đề bài đăng: "${postTopic}"`
+          }
+        ],
+        temperature: 0.7
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey.trim()}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const text = response.data.choices[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch (e) {}
+  }
+
+  // Fallback smart AI replies
+  return `Dạ chào bạn! Shop đã gửi thông tin chi tiết và ưu đãi dành riêng cho bạn vào hộp thư tin nhắn rồi ạ. Bạn kiểm tra giúp shop nhé!`;
+}

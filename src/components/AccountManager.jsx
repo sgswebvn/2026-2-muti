@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import LiveCommentManager from './LiveCommentManager';
 
 export default function AccountManager({ accounts, fetchAccounts, posts = [], fetchPosts, onOpenGuide }) {
   const [appId, setAppId] = useState('');
@@ -23,6 +24,9 @@ export default function AccountManager({ accounts, fetchAccounts, posts = [], fe
   const [singlePostCaption, setSinglePostCaption] = useState('');
   const [singlePostComments, setSinglePostComments] = useState('');
   const [publishingSingle, setPublishingSingle] = useState(false);
+
+  // Live comment manager active post state
+  const [activePostForComments, setActivePostForComments] = useState(null);
 
   // Role invite modal state
   const [selectedPageForRole, setSelectedPageForRole] = useState(null);
@@ -639,11 +643,21 @@ export default function AccountManager({ accounts, fetchAccounts, posts = [], fe
                           <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginBottom: '6px' }}>
                             {new Date(p.createdAt).toLocaleString('vi-VN')}
                           </div>
-                          {pageResult && pageResult.postUrl && (
-                            <a href={pageResult.postUrl} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', fontWeight: 600, textDecoration: 'none' }}>
-                              Xem Bài Đăng ↗
-                            </a>
-                          )}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
+                            <button 
+                              className="btn btn-primary" 
+                              style={{ fontSize: '0.725rem', padding: '3px 8px' }}
+                              onClick={() => setActivePostForComments(p)}
+                            >
+                              💬 Quản Lý & Rep Bình Luận Trực Tiếp
+                            </button>
+
+                            {pageResult && pageResult.postUrl && (
+                              <a href={pageResult.postUrl} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', fontWeight: 600, textDecoration: 'none', fontSize: '0.725rem' }}>
+                                Xem Bài Đăng ↗
+                              </a>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -653,6 +667,15 @@ export default function AccountManager({ accounts, fetchAccounts, posts = [], fe
             </div>
           </div>
         </div>
+      )}
+
+      {/* LIVE INTERACTIVE COMMENTS & REPLY MANAGER MODAL */}
+      {activePostForComments && managingPage && (
+        <LiveCommentManager 
+          pageAccount={managingPage}
+          post={activePostForComments}
+          onClose={() => setActivePostForComments(null)}
+        />
       )}
 
       {/* EDIT GROUP MODAL WITH QUICK TOPIC SUGGESTIONS */}

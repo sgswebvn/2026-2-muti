@@ -1,32 +1,25 @@
 import axios from 'axios';
-import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
+import FormData from 'form-data';
 
 const GRAPH_URL = 'https://graph.facebook.com/v20.0';
 
 /**
- * Extract filename from local URL or path
+ * Helper to convert relative media URL (/uploads/media_123.jpg) to local filesystem path
  */
 function getLocalFilePath(mediaUrl) {
   if (!mediaUrl) return null;
-  
-  // If it's a URL like http://localhost:5000/uploads/media_xxx.jpg
   if (mediaUrl.includes('/uploads/')) {
     const filename = mediaUrl.split('/uploads/').pop();
-    const localPath = path.resolve('uploads', filename);
-    if (fs.existsSync(localPath)) {
-      return localPath;
+    const filePath = path.resolve('uploads', filename);
+    if (fs.existsSync(filePath)) {
+      return filePath;
     }
   }
   return null;
 }
 
-/**
- * Publish Content to Facebook Page (Supports Text, Single/Multi Photo, or Video/Reels)
- * @param {Object} pageAccount { id, accessToken, name }
- * @param {Object} postData { caption, hashtags, mediaUrl, mediaUrls, mediaType, title }
- */
 /**
  * Execute Seeding / Auto Comments on a published Facebook post (Supports multi-line seeding comments)
  */
@@ -84,10 +77,48 @@ async function executeAutoSeedingComments(pageId, targetId, accessToken, firstCo
 }
 
 /**
+ * Fetch Live Comments & Existing Replies for a Facebook Post
+ */
+export async function getPostLiveComments(pageAccount, postId) {
+  const { accessToken } = pageAccount;
+  try {
+    const res = await axios.get(`${GRAPH_URL}/${postId}/comments`, {
+      params: {
+        fields: 'id,message,created_time,from{id,name,picture},comments{id,message,created_time,from{id,name,picture}}',
+        access_token: accessToken
+      }
+    });
+    return { success: true, comments: res.data?.data || [] };
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    console.warn(`Get live comments error for post ${postId}:`, msg);
+    return { success: false, error: msg, comments: [] };
+  }
+}
+
+/**
+ * Reply directly to a comment or post a new comment as Page
+ */
+export async function postCommentReply(pageAccount, targetId, messageText) {
+  const { accessToken } = pageAccount;
+  try {
+    const bodyForm = new URLSearchParams();
+    bodyForm.append('message', messageText.trim());
+    bodyForm.append('access_token', accessToken);
+
+    const res = await axios.post(`${GRAPH_URL}/${targetId}/comments`, bodyForm, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    return { success: true, commentId: res.data?.id };
+  } catch (err) {
+    const msg = err.response?.data?.error?.message || err.message;
+    console.error(`Reply comment error for ${targetId}:`, msg);
+    return { success: false, error: msg };
+  }
+}
+
+/**
  * Auto Reply to Customer Comments on Published Posts
- * @param {Object} pageAccount { id, accessToken }
- * @param {string} postId Facebook Post/Reel ID
- * @param {string} autoReplyMessage Custom reply template
  */
 export async function autoReplyCustomerComments(pageAccount, postId, autoReplyMessage) {
   if (!pageAccount || !postId || !autoReplyMessage) return;
@@ -128,6 +159,9 @@ export async function autoReplyCustomerComments(pageAccount, postId, autoReplyMe
   }
 }
 
+/**
+ * Publish Content to Facebook Page (Supports Text, Single/Multi Photo, or Video/Reels)
+ */
 export async function publishToFacebook(pageAccount, postData) {
   const { id: pageId, accessToken } = pageAccount;
 
@@ -350,17 +384,21 @@ export async function getPageRoles(pageId, accessToken) {
 export async function assignPageRole(pageId, userEmailOrId, role, accessToken) {
   try {
     const validRoles = ['ADMINISTER', 'EDIT_PROFILE', 'CREATE_CONTENT', 'MODERATE_COMMENTS', 'ADMIN'];
+    if (!validRoles.includes(role)) {
+      throw new Error(`Role không hợp lệ. Các role cho phép: ${validRoles.join(', ')}`);
+    }
+
     const res = await axios.post(`${GRAPH_URL}/${pageId}/roles`, null, {
       params: {
         user: userEmailOrId,
-        role: role || 'CREATE_CONTENT',
+        role: role,
         access_token: accessToken
       }
     });
-    return { success: true, data: res.data };
+
+    return res.data;
   } catch (err) {
-    const msg = err.response?.data?.error?.message || err.message;
-    throw new Error(`Lỗi mời Vai trò Fanpage: ${msg}`);
+    const errorDetails = err.response?.data?.error?.message || err.message;
+    throw new Error(errorDetails);
   }
 }
-
