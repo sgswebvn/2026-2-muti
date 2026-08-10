@@ -27,6 +27,50 @@ function getLocalFilePath(mediaUrl) {
  * @param {Object} pageAccount { id, accessToken, name }
  * @param {Object} postData { caption, hashtags, mediaUrl, mediaUrls, mediaType, title }
  */
+/**
+ * Execute Seeding / Auto Comments on a published Facebook post (Supports multi-line seeding comments)
+ */
+async function executeAutoSeedingComments(pageId, targetId, accessToken, firstCommentRaw) {
+  if (!firstCommentRaw || !targetId) return;
+
+  // Support multiple comments separated by new lines (\n)
+  const commentLines = firstCommentRaw
+    .split(/\r?\n/)
+    .map(c => c.trim())
+    .filter(Boolean);
+
+  if (commentLines.length === 0) return;
+
+  for (const commentText of commentLines) {
+    try {
+      // Primary attempt: POST /{targetId}/comments
+      await axios.post(`${GRAPH_URL}/${targetId}/comments`, null, {
+        params: {
+          message: commentText,
+          access_token: accessToken
+        }
+      });
+    } catch (err1) {
+      try {
+        // Fallback attempt: POST /{pageId}_{targetId}/comments
+        await axios.post(`${GRAPH_URL}/${pageId}_${targetId}/comments`, null, {
+          params: {
+            message: commentText,
+            access_token: accessToken
+          }
+        });
+      } catch (err2) {
+        console.warn(`Facebook Auto Comment Warning for post ${targetId}:`, err2.response?.data?.error?.message || err2.message);
+      }
+    }
+
+    // Brief delay between multiple comments to avoid spam triggers
+    if (commentLines.length > 1) {
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+}
+
 export async function publishToFacebook(pageAccount, postData) {
   const { id: pageId, accessToken } = pageAccount;
 
@@ -62,18 +106,7 @@ export async function publishToFacebook(pageAccount, postData) {
       });
       const postId = res.data.id;
 
-      if (postData.firstComment && postId) {
-        try {
-          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
-            params: {
-              message: postData.firstComment,
-              access_token: accessToken
-            }
-          });
-        } catch (commentErr) {
-          console.warn('Facebook Feed Auto First Comment Warning:', commentErr.response?.data || commentErr.message);
-        }
-      }
+      await executeAutoSeedingComments(pageId, postId, accessToken, postData.firstComment);
 
       return {
         success: true,
@@ -110,13 +143,7 @@ export async function publishToFacebook(pageAccount, postData) {
 
         const postId = res.data.post_id || res.data.id;
 
-        if (postData.firstComment && postId) {
-          try {
-            await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
-              params: { message: postData.firstComment, access_token: accessToken }
-            });
-          } catch (e) {}
-        }
+        await executeAutoSeedingComments(pageId, postId, accessToken, postData.firstComment);
 
         return {
           success: true,
@@ -166,13 +193,7 @@ export async function publishToFacebook(pageAccount, postData) {
 
       const postId = feedRes.data.id;
 
-      if (postData.firstComment && postId) {
-        try {
-          await axios.post(`${GRAPH_URL}/${postId}/comments`, null, {
-            params: { message: postData.firstComment, access_token: accessToken }
-          });
-        } catch (e) {}
-      }
+      await executeAutoSeedingComments(pageId, postId, accessToken, postData.firstComment);
 
       return {
         success: true,
@@ -210,13 +231,7 @@ export async function publishToFacebook(pageAccount, postData) {
 
       const videoId = res.data.id;
 
-      if (postData.firstComment && videoId) {
-        try {
-          await axios.post(`${GRAPH_URL}/${videoId}/comments`, null, {
-            params: { message: postData.firstComment, access_token: accessToken }
-          });
-        } catch (e) {}
-      }
+      await executeAutoSeedingComments(pageId, videoId, accessToken, postData.firstComment);
 
       return {
         success: true,

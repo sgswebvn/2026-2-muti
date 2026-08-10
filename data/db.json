@@ -2,35 +2,114 @@
   "settings": {
     "appId": "1062583589573156",
     "appSecret": "3e270e4e623e1d2ac851dd3fccbc97bc",
-    "updatedAt": "2026-08-10T06:14:29.263Z",
+    "updatedAt": "2026-08-10T06:22:35.900Z",
     "openaiApiKey": ""
   },
   "accounts": [
     {
-      "group": "Mặc định",
+      "group": "Nhóm c",
       "id": "726155563894891",
       "name": "Đồ Án Tốt Nghiệp",
       "category": "Công ty công nghệ thông tin",
-      "accessToken": "EAAPGagVmkiQBSN4Kp87mq7fy0k3dIKERcbeV48fv4ZC8AYsHidPUs4W1ysKZCs80ROSxVZAYVZByQP5ujafllDWZCiZBWVuEjIRbMqr4rrUCoHDmniiOV0BoAcnHk9uBnxguq1ZAoQFFxp5ZAlr6gGYlRhjmE8nPWBCB8yamq6WmkOnKHilWo3N4X9Jo5hK4ex0QYIv3N6NX",
-      "avatar": "https://scontent.fsgn2-7.fna.fbcdn.net/v/t39.30808-1/769010535_122182985108928077_8280088354325445407_n.jpg?stp=c113.0.452.452a_dst-jpg_s200x200_tt6&_nc_cat=108&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGEVNAXWyzwQQZbzI4mmLIAP8mFOXbaND0_yYU5dto0PT69yOBlSpuDpgjQP3n4Uo1mQ9lva-2CGAiqtP13csy_&_nc_ohc=LaYd3t6y0qQQ7kNvwGUy1_D&_nc_oc=AdrVDzaEp1J9mPfEWOPsTahx5T8LRGosNiuuXFSjJCDEkhwzrJBT_ehJVV9qhI4LZLg&_nc_zt=24&_nc_ht=scontent.fsgn2-7.fna&edm=AGaHXAAEAAAA&_nc_gid=-iE9xMh9Byko6-jHKwpf2A&_nc_tpa=Q5bMBQLD082Gahras-onogr9XeFnEIwyLgmeJ0ygvOGXlfQWuI84owUAEaRWJ1JybcLeit5lZavwfbg0mA&oh=00_AQHCLNDnfmtIbbhyIw5RvUoU42z9xpY2lsAxU6T2xdSDkg&oe=6A7F4EAD",
+      "accessToken": "EAAPGagVmkiQBSAsmu3gke86ZBhWmrfU9tkz0gOOZBZCsoswnhLqvZAy935E3UmyFSxJtPimziCwZALd8E97S0rwURibzV35SXz9Fl9pFNmnAneZB2eLkGBh2RZBkodvoJZB6mt01vOdhvLYS3cflr23QkMq1pw20G5S3xEIeKJZA7PWz8cRGvlFPtTfLwz2ruJv4MTgydXr7r",
+      "avatar": "https://scontent.fsgn2-7.fna.fbcdn.net/v/t39.30808-1/769010535_122182985108928077_8280088354325445407_n.jpg?stp=c113.0.452.452a_dst-jpg_s200x200_tt6&_nc_cat=108&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGEVNAXWyzwQQZbzI4mmLIAP8mFOXbaND0_yYU5dto0PT69yOBlSpuDpgjQP3n4Uo1mQ9lva-2CGAiqtP13csy_&_nc_ohc=LaYd3t6y0qQQ7kNvwGUy1_D&_nc_oc=AdrVDzaEp1J9mPfEWOPsTahx5T8LRGosNiuuXFSjJCDEkhwzrJBT_ehJVV9qhI4LZLg&_nc_zt=24&_nc_ht=scontent.fsgn2-7.fna&edm=AGaHXAAEAAAA&_nc_gid=-3y-Sf_lcjF1w5UOn6UVaQ&_nc_tpa=Q5bMBQKHwby5l53I8HvpTwq5eJKQtAdcRpMDQ5ILAMPwW_Nsc-Vl_-QxSwQP_okHVURJgki4Bsjvjfnv6w&oh=00_AQHxqmYO9itNwKgsjlBgodBiUyU3sTbNf7WFxEqU3ujRAQ&oe=6A7F4EAD",
       "platform": "facebook",
       "tokenStatus": "active",
-      "lastCheckedAt": "2026-08-10T06:14:30.158Z",
-      "createdAt": "2026-08-10T06:14:30.158Z"
+      "lastCheckedAt": "2026-08-10T06:22:36.713Z",
+      "createdAt": "2026-08-10T06:22:36.713Z",
+      "updatedAt": "2026-08-10T06:22:56.578Z"
     },
     {
       "group": "Mặc định",
       "id": "535269419675887",
       "name": "Devprogenz2",
       "category": "Công ty công nghệ thông tin",
-      "accessToken": "EAAPGagVmkiQBSEuRIYFszA3c1PH03Xvored8PegtrO4tfH6a1he6heBNxaiuRGQLpPZANLUMQt8r6dynOiZBsIq3PhwVAdfe0qFWJpRBnjzc5mU9PsEMmx2IqH8qxAZAjOvEYtZBB7j8BEMp8R4ZBLCVu9pfQZCiNwT09miH9d25Nk6f5ylUPOHyZC3VEny3NBuePWVsci7",
-      "avatar": "https://scontent.fsgn2-9.fna.fbcdn.net/v/t39.30808-1/480493993_122111840240754602_4648667244334510483_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=106&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGrmfmfguZX8YL18Ef-QkgM_MynTJL4dln8zKdMkvh2WbdaGIVxDV1h5HkD3KShUf2o_U-NyBf2_OLp-RrKNpio&_nc_ohc=ll5MDbjfnwcQ7kNvwHfAqly&_nc_oc=Adp0ixBj9awtuPQnafyNlZhdr_7hR1bzhqhuA2hl916ZmZKC9AMUUauWCWLw-XBHEeU&_nc_zt=24&_nc_ht=scontent.fsgn2-9.fna&edm=AGaHXAAEAAAA&_nc_gid=-iE9xMh9Byko6-jHKwpf2A&_nc_tpa=Q5bMBQJ_jX6P7t9Q1X1CHegqRZ32xIYFsMylviK7kUmkGxNGbjnXsKvGQBPtLDoaFJRF9s7mvgttwz9zyg&oh=00_AQHkkj-P1w8AW_FH71V0O8YJ0_DcgVDyM2IEJbEheCjnFQ&oe=6A7F3DAD",
+      "accessToken": "EAAPGagVmkiQBSC2ZCzTpBfsyaexZBunJbIdPOh1KCr7mgohqgZBbbwEGcEOQAG3sHmWjaGv9t9E97Pg4REzRZACZBojHYvbGBZCfZBIjMZAYZA60aYL0xUAarINTvCJZCqJTvG4VFdCvrkgJqPzbxHSArxzdZBS6SRjOfBef0KwzglXcDsddZCRFKJZBRexTbAodq1Wz1gTe8tYVv",
+      "avatar": "https://scontent.fsgn2-9.fna.fbcdn.net/v/t39.30808-1/480493993_122111840240754602_4648667244334510483_n.jpg?stp=dst-jpg_s200x200_tt6&_nc_cat=106&ccb=1-7&_nc_sid=f907e8&_nc_eui2=AeGrmfmfguZX8YL18Ef-QkgM_MynTJL4dln8zKdMkvh2WbdaGIVxDV1h5HkD3KShUf2o_U-NyBf2_OLp-RrKNpio&_nc_ohc=ll5MDbjfnwcQ7kNvwHfAqly&_nc_oc=Adp0ixBj9awtuPQnafyNlZhdr_7hR1bzhqhuA2hl916ZmZKC9AMUUauWCWLw-XBHEeU&_nc_zt=24&_nc_ht=scontent.fsgn2-9.fna&edm=AGaHXAAEAAAA&_nc_gid=-3y-Sf_lcjF1w5UOn6UVaQ&_nc_tpa=Q5bMBQI62QeW7LjMqgna-cGBjeICjmAv_jAEM7-Jj7aQUmImfGqEfjojuB_PQrLb-p5DrVD7sYzI85pTSQ&oh=00_AQGoEf27YpR4ytIWXLOmSUJQ8VxyBghyEn9uWPukUmFnvg&oe=6A7F3DAD",
       "platform": "facebook",
       "tokenStatus": "active",
-      "lastCheckedAt": "2026-08-10T06:14:30.159Z",
-      "createdAt": "2026-08-10T06:14:30.159Z"
+      "lastCheckedAt": "2026-08-10T06:22:36.714Z",
+      "createdAt": "2026-08-10T06:22:36.714Z"
     }
   ],
-  "posts": [],
+  "posts": [
+    {
+      "id": "post_1786343011418_4dreo",
+      "title": "Test upload",
+      "caption": "Test upload",
+      "hashtags": "#facebook #viral #reel",
+      "firstComment": "Test upload",
+      "mediaUrl": "http://localhost:5000/uploads/media_1786342997075_nyk2ul.mp4",
+      "mediaUrls": [
+        "http://localhost:5000/uploads/media_1786342997075_nyk2ul.mp4"
+      ],
+      "mediaType": "video",
+      "postFormat": "standard",
+      "platforms": [
+        "facebook"
+      ],
+      "targetAccountIds": [
+        "726155563894891",
+        "535269419675887"
+      ],
+      "status": "published",
+      "scheduledAt": null,
+      "results": {
+        "facebook_726155563894891": {
+          "accountName": "Đồ Án Tốt Nghiệp",
+          "platform": "facebook",
+          "pageId": "726155563894891",
+          "success": true,
+          "postId": "1028578340172709",
+          "postUrl": "https://www.facebook.com/reel/1028578340172709"
+        },
+        "facebook_535269419675887": {
+          "accountName": "Devprogenz2",
+          "platform": "facebook",
+          "pageId": "535269419675887",
+          "success": true,
+          "postId": "1018905187614905",
+          "postUrl": "https://www.facebook.com/reel/1018905187614905"
+        }
+      },
+      "createdAt": "2026-08-10T06:23:31.418Z",
+      "updatedAt": "2026-08-10T06:23:39.993Z",
+      "publishedAt": "2026-08-10T06:23:39.993Z"
+    },
+    {
+      "id": "post_1786343122504_06za0",
+      "title": "🔥 [ChatGPT Content] Ngẫu nhiên đi...",
+      "caption": "✨ NỘI DUNG TỰ ĐỘNG CHUẨN CHATGPT ✨\n\nNội dung bài viết được sinh ra theo prompt của bạn: \"Ngẫu nhiên đi\"\n\n🔹 Điểm nổi bật và giá trị cốt lõi\n🔹 Ưu đãi và lời kêu gọi hành động (Call to action)\n\n👉 Nhắn tin ngay để nhận tư vấn chi tiết!",
+      "hashtags": "#ChatGPT #ContentMarketing #SocialMedia #Viral",
+      "firstComment": "👉 Liên hệ ngay hoặc để lại bình luận bên dưới để nhận thêm thông tin chi tiết!",
+      "mediaUrl": "https://image.pollinations.ai/prompt/create%20image%20girl%20AI?width=1024&height=1024&nologo=true&seed=7938",
+      "mediaUrls": [
+        "https://image.pollinations.ai/prompt/create%20image%20girl%20AI?width=1024&height=1024&nologo=true&seed=7938"
+      ],
+      "mediaType": "image",
+      "postFormat": "standard",
+      "platforms": [
+        "facebook"
+      ],
+      "targetAccountIds": [
+        "726155563894891"
+      ],
+      "status": "published",
+      "scheduledAt": null,
+      "results": {
+        "facebook_726155563894891": {
+          "accountName": "Đồ Án Tốt Nghiệp",
+          "platform": "facebook",
+          "pageId": "726155563894891",
+          "success": true,
+          "postId": "726155563894891_122183082128928077",
+          "postUrl": "https://www.facebook.com/726155563894891_122183082128928077"
+        }
+      },
+      "createdAt": "2026-08-10T06:25:22.504Z",
+      "updatedAt": "2026-08-10T06:25:26.240Z",
+      "publishedAt": "2026-08-10T06:25:26.240Z"
+    }
+  ],
   "logs": []
 }

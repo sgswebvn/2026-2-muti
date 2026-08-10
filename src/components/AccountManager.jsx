@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-export default function AccountManager({ accounts, fetchAccounts, onOpenGuide }) {
+export default function AccountManager({ accounts, fetchAccounts, posts = [], fetchPosts, onOpenGuide }) {
   const [appId, setAppId] = useState('');
   const [appSecret, setAppSecret] = useState('');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
@@ -16,6 +16,13 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
   // Selected accounts for bulk group assignment
   const [selectedAccIds, setSelectedAccIds] = useState([]);
   const [bulkGroupName, setBulkGroupName] = useState('');
+
+  // Single Fanpage Management Modal state
+  const [managingPage, setManagingPage] = useState(null);
+  const [singlePostTitle, setSinglePostTitle] = useState('');
+  const [singlePostCaption, setSinglePostCaption] = useState('');
+  const [singlePostComments, setSinglePostComments] = useState('');
+  const [publishingSingle, setPublishingSingle] = useState(false);
 
   // Role invite modal state
   const [selectedPageForRole, setSelectedPageForRole] = useState(null);
@@ -160,6 +167,45 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
+  // Quick Post for Single Fanpage Modal
+  const handlePublishSinglePagePost = async (e) => {
+    e.preventDefault();
+    if (!managingPage || !singlePostCaption.trim()) return;
+
+    setPublishingSingle(true);
+    try {
+      const payload = {
+        title: singlePostTitle,
+        caption: singlePostCaption,
+        firstComment: singlePostComments,
+        platforms: ['facebook'],
+        targetAccountIds: [managingPage.id],
+        publishNow: true
+      };
+
+      const res = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        alert(`Đã đăng bài viết lên Fanpage ${managingPage.name} thành công!`);
+        setSinglePostTitle('');
+        setSinglePostCaption('');
+        setSinglePostComments('');
+        if (fetchPosts) fetchPosts();
+      } else {
+        throw new Error(data.error || 'Thao tác thất bại');
+      }
+    } catch (err) {
+      alert(`Lỗi đăng bài: ${err.message}`);
+    } finally {
+      setPublishingSingle(false);
+    }
+  };
+
   const toggleAccSelection = (id) => {
     if (selectedAccIds.includes(id)) {
       setSelectedAccIds(selectedAccIds.filter(i => i !== id));
@@ -219,6 +265,13 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     const matchesGroup = selectedGroupFilter === 'ALL' || (acc.group || 'Mặc định') === selectedGroupFilter;
     return matchesSearch && matchesGroup;
   });
+
+  // Filter posts belonging to managingPage
+  const pagePosts = managingPage ? posts.filter(p => {
+    const isTargeted = p.targetAccountIds && p.targetAccountIds.includes(managingPage.id);
+    const hasResult = p.results && (p.results[`facebook_${managingPage.id}`] || p.results[managingPage.id]);
+    return isTargeted || hasResult;
+  }) : [];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -468,13 +521,21 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #334155', paddingTop: '10px' }}>
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #334155', paddingTop: '10px', flexWrap: 'wrap' }}>
+                    <button 
+                      className="btn btn-primary" 
+                      style={{ fontSize: '0.75rem', padding: '4px 8px', fontWeight: 600 }}
+                      onClick={() => setManagingPage(acc)}
+                    >
+                      Quản Lý Trang Này
+                    </button>
+
                     <button 
                       className="btn btn-secondary" 
                       style={{ fontSize: '0.75rem', padding: '4px 8px' }}
                       onClick={() => setSelectedPageForRole(acc)}
                     >
-                      Mời Role Fanpage
+                      Role
                     </button>
 
                     <button 
@@ -491,6 +552,108 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
           </div>
         )}
       </div>
+
+      {/* SINGLE FANPAGE MANAGEMENT MODAL */}
+      {managingPage && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '780px', maxHeight: '90vh', overflowY: 'auto', padding: '24px', background: '#1e293b' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', borderBottom: '1px solid #334155', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {managingPage.avatar && <img src={managingPage.avatar} alt="" style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover' }} />}
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>Trang: {managingPage.name}</h3>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8' }}>ID: {managingPage.id} · Nhóm: {managingPage.group || 'Mặc định'}</div>
+                </div>
+              </div>
+
+              <button className="btn btn-secondary" onClick={() => setManagingPage(null)}>Đóng</button>
+            </div>
+
+            {/* Grid 2: Quick Publisher & Page Post History */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', alignItems: 'start' }}>
+              {/* Quick Post Box */}
+              <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155' }}>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '10px' }}>Soạn Bài Đăng Nhanh</h4>
+
+                <form onSubmit={handlePublishSinglePagePost}>
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
+                    <label className="form-label">Tiêu đề (Tùy chọn)</label>
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Nhập tiêu đề..."
+                      value={singlePostTitle}
+                      onChange={(e) => setSinglePostTitle(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
+                    <label className="form-label">Nội dung bài viết (*)</label>
+                    <textarea 
+                      className="input-field" 
+                      rows={4}
+                      placeholder="Nhập nội dung bài viết..."
+                      value={singlePostCaption}
+                      onChange={(e) => setSinglePostCaption(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '14px' }}>
+                    <label className="form-label">Bình luận seeding tự động (Mỗi câu 1 dòng)</label>
+                    <textarea 
+                      className="textarea-field" 
+                      rows={2}
+                      placeholder="Nhập bình luận seeding..."
+                      value={singlePostComments}
+                      onChange={(e) => setSinglePostComments(e.target.value)}
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '10px' }} disabled={publishingSingle}>
+                    {publishingSingle ? 'Đang xuất bản...' : 'Đăng Bài Ngay Lên Trang Này'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Page Post History */}
+              <div style={{ background: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #334155', maxHeight: '420px', overflowY: 'auto' }}>
+                <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '10px' }}>
+                  Lịch Sử Bài Đăng Trang Này ({pagePosts.length})
+                </h4>
+
+                {pagePosts.length === 0 ? (
+                  <div style={{ fontSize: '0.825rem', color: '#94a3b8', padding: '20px', textAlign: 'center' }}>
+                    Chưa có bài viết nào đăng riêng lên trang này.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {pagePosts.map(p => {
+                      const pageResult = p.results ? (p.results[`facebook_${managingPage.id}`] || p.results[managingPage.id]) : null;
+                      return (
+                        <div key={p.id} style={{ padding: '10px', borderRadius: '6px', background: '#1e293b', border: '1px solid #334155', fontSize: '0.8rem' }}>
+                          <div style={{ fontWeight: 600, color: '#f8fafc', marginBottom: '4px' }}>
+                            {p.title || p.caption?.substring(0, 50)}...
+                          </div>
+                          <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginBottom: '6px' }}>
+                            {new Date(p.createdAt).toLocaleString('vi-VN')}
+                          </div>
+                          {pageResult && pageResult.postUrl && (
+                            <a href={pageResult.postUrl} target="_blank" rel="noreferrer" style={{ color: '#60a5fa', fontWeight: 600, textDecoration: 'none' }}>
+                              Xem Bài Đăng ↗
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EDIT GROUP MODAL WITH QUICK TOPIC SUGGESTIONS */}
       {editingGroupAcc && (

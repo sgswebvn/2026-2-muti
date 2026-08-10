@@ -115,6 +115,8 @@ export default function App() {
           <AccountManager 
             accounts={accounts} 
             fetchAccounts={fetchAccounts} 
+            posts={posts}
+            fetchPosts={fetchPosts}
             onOpenGuide={() => setIsGuideOpen(true)}
           />
         )}

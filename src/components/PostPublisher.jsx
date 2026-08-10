@@ -323,29 +323,28 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
             />
           </div>
 
-          {/* Hashtags & First Comment */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
-            <div className="form-group">
-              <label className="form-label">Hashtags</label>
-              <input 
-                type="text" 
-                className="input-field"
-                placeholder="#hashtag1 #hashtag2"
-                value={hashtags}
-                onChange={(e) => setHashtags(e.target.value)}
-              />
-            </div>
+          {/* Hashtags */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Hashtags</label>
+            <input 
+              type="text" 
+              className="input-field"
+              placeholder="#hashtag1 #hashtag2"
+              value={hashtags}
+              onChange={(e) => setHashtags(e.target.value)}
+            />
+          </div>
 
-            <div className="form-group">
-              <label className="form-label">Bình Luận Đầu (First Comment)</label>
-              <input 
-                type="text" 
-                className="input-field"
-                placeholder="Bình luận tự động..."
-                value={firstComment}
-                onChange={(e) => setFirstComment(e.target.value)}
-              />
-            </div>
+          {/* Multi-line Auto Seeding Comments */}
+          <div className="form-group" style={{ marginBottom: '14px' }}>
+            <label className="form-label">Tự Động Seeding Bình Luận (Nhập nhiều bình luận, mỗi câu 1 dòng)</label>
+            <textarea 
+              className="textarea-field"
+              rows={3}
+              placeholder="VD: Cần tư vấn giá bao nhiêu shop?&#10;Sản phẩm dùng rất thích ạ&#10;Đã nhắn tin cho shop rồi nhé"
+              value={firstComment}
+              onChange={(e) => setFirstComment(e.target.value)}
+            />
           </div>
 
           {/* Multiple Image / Video Upload */}
