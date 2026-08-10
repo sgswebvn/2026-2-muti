@@ -25,16 +25,6 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
 
   useEffect(() => {
     fetchSettings();
-
-    // Auto-detect Facebook OAuth redirect token from URL hash (#access_token=...)
-    if (window.location.hash && window.location.hash.includes('access_token=')) {
-      const params = new URLSearchParams(window.location.hash.substring(1));
-      const accessToken = params.get('access_token');
-      if (accessToken) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        connectTokenToBackend(accessToken);
-      }
-    }
   }, []);
 
   const fetchSettings = async () => {
@@ -64,8 +54,10 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     }
   };
 
-  // Connect Token Helper
-  const connectTokenToBackend = async (tokenStr) => {
+  const handleConnectToken = async (e) => {
+    e.preventDefault();
+    if (!tokenInput.trim()) return;
+
     setLoading(true);
     setMessage(null);
 
@@ -77,7 +69,7 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
       const res = await fetch('/api/accounts/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: tokenStr.trim() })
+        body: JSON.stringify({ token: tokenInput.trim() })
       });
 
       const data = await res.json();
@@ -97,27 +89,6 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleConnectToken = (e) => {
-    e.preventDefault();
-    if (!tokenInput.trim()) return;
-    connectTokenToBackend(tokenInput);
-  };
-
-  // Direct OAuth 2.0 Redirect Login Flow
-  const handleFbOAuthLogin = () => {
-    setLoading(true);
-    setMessage(null);
-
-    const targetAppId = appId.trim() || '1062583589573156';
-    const redirectUri = window.location.origin + '/';
-    const scope = 'pages_show_list,pages_manage_posts,pages_read_engagement';
-
-    // Build direct Facebook OAuth URL
-    const oauthUrl = `https://www.facebook.com/v20.0/dialog/oauth?client_id=${targetAppId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token&scope=${encodeURIComponent(scope)}`;
-
-    window.location.href = oauthUrl;
   };
 
   const handleCheckTokens = async () => {
@@ -225,66 +196,40 @@ export default function AccountManager({ accounts, fetchAccounts, onOpenGuide })
         </div>
       )}
 
-      {/* Grid: OAuth Login & Manual Token Connector */}
+      {/* Grid: Token Connector & App Credentials */}
       <div className="grid-2">
-        {/* 1. Facebook OAuth 2.0 & Token Input Form */}
+        {/* 1. Access Token Input Form */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '14px', fontWeight: 700 }}>
-            Kết Nối Tài Khoản Facebook & Fanpages
-          </h3>
-
-          {/* Facebook OAuth Direct Button */}
-          <div style={{ marginBottom: '20px' }}>
-            <button
-              type="button"
-              className="btn"
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: '#1877f2',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                borderRadius: '8px'
-              }}
-              onClick={handleFbOAuthLogin}
-              disabled={loading}
-            >
-              {loading ? 'Đang Kết Nối Facebook...' : 'Đăng Nhập Bằng Facebook (Cách 2)'}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
+              Kết Nối Access Token Fanpage
+            </h3>
+            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={onOpenGuide}>
+              HD Lấy Token
             </button>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'center' }}>
-              Bấm nút trên để đăng nhập tài khoản Facebook thường và kết nối tự động toàn bộ Fanpage.
+          </div>
+
+          <form onSubmit={handleConnectToken}>
+            <div className="form-group" style={{ marginBottom: '16px' }}>
+              <label className="form-label">Access Token (Dán token từ Graph API Explorer)</label>
+              <textarea
+                className="textarea-field"
+                style={{ minHeight: '100px', fontSize: '0.85rem', fontFamily: 'monospace' }}
+                placeholder="Dán mã EAAPGagVmkiQ... vào đây"
+                value={tokenInput}
+                onChange={(e) => setTokenInput(e.target.value)}
+              />
             </div>
-          </div>
 
-          <div style={{ borderTop: '1px solid #334155', paddingTop: '16px' }}>
-            <form onSubmit={handleConnectToken}>
-              <div className="form-group">
-                <label className="form-label">Hoặc dán Access Token thủ công (Dành cho Dev)</label>
-                <textarea
-                  className="textarea-field"
-                  style={{ minHeight: '80px', fontSize: '0.85rem', fontFamily: 'monospace' }}
-                  placeholder="Dán mã EAAPGagVmkiQ..."
-                  value={tokenInput}
-                  onChange={(e) => setTokenInput(e.target.value)}
-                />
-              </div>
-
-              <button type="submit" className="btn btn-secondary" style={{ width: '100%', padding: '10px' }} disabled={loading}>
-                {loading ? 'Đang quét...' : 'Kết Nối Bằng Access Token'}
-              </button>
-            </form>
-          </div>
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px' }} disabled={loading}>
+              {loading ? 'Đang quét Fanpage...' : 'Kết Nối & Quét Danh Sách Fanpage'}
+            </button>
+          </form>
         </div>
 
         {/* 2. Meta App & OpenAI Credentials */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Cấu Hình Hệ Thống & OpenAI Key</h3>
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={onOpenGuide}>
-              Hướng Dẫn
-            </button>
-          </div>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '14px' }}>Cấu Hình Hệ Thống & OpenAI Key</h3>
 
           <div className="form-group" style={{ marginBottom: '10px' }}>
             <label className="form-label">OpenAI API Key (Tích hợp ChatGPT Content)</label>
