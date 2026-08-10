@@ -244,6 +244,7 @@ app.post('/api/upload', upload.array('media', 10), (req, res) => {
       success: true,
       mediaUrls: fileUrls,
       fileUrl: fileUrls[0],
+      originalName: req.files[0].originalname,
       mediaType: mediaType
     });
   } catch (err) {

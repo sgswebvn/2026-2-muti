@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Video, Sparkles, Send, Key, Upload, CheckCircle2, AlertCircle, Cpu, Settings } from 'lucide-react';
+import { Video, Sparkles, Send, Key, Upload, CheckCircle2, AlertCircle, Cpu, Settings, Star } from 'lucide-react';
 
 export default function AiContentGenerator({ accounts, onSendToPublisher, onOpenGuide }) {
-  // Model Choice: 'grok' (Super Grok 4.5) | 'chatgpt' (ChatGPT OpenAI)
-  const [selectedModel, setSelectedModel] = useState('grok');
+  // Model Choice: 'gemini' (Google Gemini 1.5 FREE) | 'grok' (Super Grok 4.5) | 'chatgpt' (ChatGPT OpenAI)
+  const [selectedModel, setSelectedModel] = useState('gemini');
 
   // Keys
+  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [grokApiKey, setGrokApiKey] = useState('');
   const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [showKeyInput, setShowKeyInput] = useState(false);
@@ -28,6 +29,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
       const res = await fetch('/api/settings');
       const data = await res.json();
       if (data.success && data.settings) {
+        if (data.settings.geminiApiKey) setGeminiApiKey(data.settings.geminiApiKey);
         if (data.settings.grokApiKey) setGrokApiKey(data.settings.grokApiKey);
         if (data.settings.openaiApiKey) setOpenaiApiKey(data.settings.openaiApiKey);
       }
@@ -40,13 +42,14 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          geminiApiKey: geminiApiKey.trim(),
           grokApiKey: grokApiKey.trim(),
           openaiApiKey: openaiApiKey.trim()
         })
       });
       const data = await res.json();
       if (data.success) {
-        setNotice({ type: 'success', text: 'Đã lưu cấu hình API Keys (Grok 4.5 & ChatGPT) thành công!' });
+        setNotice({ type: 'success', text: 'Đã lưu cấu hình API Keys (Google Gemini, Grok 4.5 & ChatGPT) thành công!' });
         setShowKeyInput(false);
       }
     } catch (err) {
@@ -85,8 +88,9 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoUrl: uploadedUrl,
+          originalName: uploadData.originalName || file.name,
           model: selectedModel,
-          videoPrompt: `Phân tích video "${file.name}" và tạo tiêu đề tiếng Anh cuốn hút`
+          videoPrompt: `Phân tích nội dung video "${uploadData.originalName || file.name}" và tạo tiêu đề tiếng Anh cuốn hút`
         })
       });
 
@@ -102,7 +106,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
         });
         setNotice({
           type: 'success',
-          text: `Đã phân tích xong video bằng model [${selectedModel === 'grok' ? 'Super Grok 4.5' : 'ChatGPT'}]!`
+          text: `Đã phân tích xong video thành công bằng [${analyzeData.source}]!`
         });
       } else {
         throw new Error(analyzeData.error || 'Lỗi phân tích video.');
@@ -123,6 +127,12 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
       firstComment: '👉 Check out this video and leave a reply below!',
       mediaUrls: videoAnalysisResult.videoUrl ? [videoAnalysisResult.videoUrl] : []
     });
+  };
+
+  const getModelLabel = () => {
+    if (selectedModel === 'gemini') return 'Google Gemini (Free)';
+    if (selectedModel === 'grok') return 'Super Grok 4.5';
+    return 'ChatGPT (OpenAI)';
   };
 
   return (
@@ -158,7 +168,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
                 style={{ fontSize: '0.8rem', padding: '6px 12px' }}
                 onClick={onOpenGuide}
               >
-                📖 Hướng Dẫn Lấy API Keys
+                📖 Hướng Dẫn Lấy Keys
               </button>
             )}
             <button 
@@ -172,13 +182,44 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
           </div>
         </div>
 
-        {/* SELECT AI MODEL (GROK 4.5 vs CHATGPT) */}
-        <div style={{ background: '#0f172a', padding: '14px', borderRadius: '10px', border: '1px solid #334155' }}>
-          <label className="form-label" style={{ marginBottom: '8px', fontSize: '0.875rem' }}>
+        {/* SELECT AI MODEL (GEMINI FREE vs GROK 4.5 vs CHATGPT) */}
+        <div style={{ background: '#0f172a', padding: '16px', borderRadius: '10px', border: '1px solid #334155' }}>
+          <label className="form-label" style={{ marginBottom: '10px', fontSize: '0.9rem', fontWeight: 700, color: '#38bdf8' }}>
             Chọn AI Model Phân Tích Video:
           </label>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            {/* GEMINI FREE OPTION */}
+            <div
+              onClick={() => setSelectedModel('gemini')}
+              style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                background: selectedModel === 'gemini' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(255,255,255,0.03)',
+                border: selectedModel === 'gemini' ? '2px solid #22c55e' : '1px solid #334155',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <input 
+                type="radio" 
+                name="aiModelChoice" 
+                checked={selectedModel === 'gemini'} 
+                onChange={() => setSelectedModel('gemini')} 
+              />
+              <div>
+                <div style={{ fontWeight: 700, color: selectedModel === 'gemini' ? '#4ade80' : 'var(--text-main)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  🌟 Google Gemini 1.5 <span style={{ background: '#22c55e', color: '#000', fontSize: '0.65rem', padding: '1px 6px', borderRadius: '4px', fontWeight: 800 }}>100% FREE DEMO</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Miễn phí hoàn toàn không cần thẻ Visa (Lấy key tại aistudio.google.com)
+                </div>
+              </div>
+            </div>
+
             {/* GROK 4.5 OPTION */}
             <div
               onClick={() => setSelectedModel('grok')}
@@ -201,11 +242,11 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
                 onChange={() => setSelectedModel('grok')} 
               />
               <div>
-                <div style={{ fontWeight: 700, color: selectedModel === 'grok' ? '#e9d5ff' : 'var(--text-main)', fontSize: '0.925rem' }}>
-                  ⚡ Model 1: Super Grok (xAI Grok-4.5)
+                <div style={{ fontWeight: 700, color: selectedModel === 'grok' ? '#e9d5ff' : 'var(--text-main)', fontSize: '0.9rem' }}>
+                  ⚡ Super Grok 4.5 (xAI)
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Phân tích video chuyên sâu bằng xAI Grok-4.5 Vision
+                  Model xAI Grok 4.5 (Yêu cầu có số dư credits trên console.x.ai)
                 </div>
               </div>
             </div>
@@ -232,11 +273,11 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
                 onChange={() => setSelectedModel('chatgpt')} 
               />
               <div>
-                <div style={{ fontWeight: 700, color: selectedModel === 'chatgpt' ? '#93c5fd' : 'var(--text-main)', fontSize: '0.925rem' }}>
-                  🤖 Model 2: ChatGPT (OpenAI GPT-4o)
+                <div style={{ fontWeight: 700, color: selectedModel === 'chatgpt' ? '#93c5fd' : 'var(--text-main)', fontSize: '0.9rem' }}>
+                  🤖 ChatGPT (OpenAI GPT-4o)
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  Trích xuất tiêu đề & nội dung video bằng OpenAI GPT-4o
+                  Trích xuất nội dung video bằng sk-... API Key OpenAI
                 </div>
               </div>
             </div>
@@ -248,16 +289,27 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
       {showKeyInput && (
         <div className="glass-card" style={{ padding: '20px', background: 'rgba(15, 23, 42, 0.95)' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '12px', color: '#60a5fa' }}>
-            Cấu Hình API Keys Cho Cả 2 Models
+            Cấu Hình API Keys Cho Cả 3 Models
           </h3>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+            <div>
+              <label className="form-label" style={{ color: '#4ade80' }}>Google Gemini API Key (100% Miễn Phí)</label>
+              <input 
+                type="password" 
+                className="input-field" 
+                placeholder="Dán Gemini API Key từ aistudio.google.com" 
+                value={geminiApiKey} 
+                onChange={(e) => setGeminiApiKey(e.target.value)} 
+              />
+            </div>
+
             <div>
               <label className="form-label">Super Grok API Key (xai-...)</label>
               <input 
                 type="password" 
                 className="input-field" 
-                placeholder="Dán xai-... API Key tại đây" 
+                placeholder="Dán xai-... API Key từ console.x.ai" 
                 value={grokApiKey} 
                 onChange={(e) => setGrokApiKey(e.target.value)} 
               />
@@ -297,7 +349,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
           </h3>
 
           <div style={{ background: '#0f172a', padding: '24px 16px', borderRadius: '12px', border: '2px dashed #475569', textAlign: 'center', marginBottom: '16px' }}>
-            <Upload size={42} color="#a855f7" style={{ marginBottom: '10px' }} />
+            <Upload size={42} color={selectedModel === 'gemini' ? '#22c55e' : (selectedModel === 'grok' ? '#a855f7' : '#3b82f6')} style={{ marginBottom: '10px' }} />
             <div style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '4px' }}>
               Tải Tệp Video Của Bạn Lên
             </div>
@@ -320,7 +372,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
               className="btn btn-primary" 
               style={{ 
                 cursor: 'pointer', 
-                background: selectedModel === 'grok' ? '#9333ea' : '#2563eb', 
+                background: selectedModel === 'gemini' ? '#16a34a' : (selectedModel === 'grok' ? '#9333ea' : '#2563eb'), 
                 border: 'none',
                 padding: '12px 20px',
                 fontSize: '0.9rem',
@@ -328,8 +380,8 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
               }}
             >
               {analyzingVideo 
-                ? `⏳ ${selectedModel === 'grok' ? 'Grok 4.5' : 'ChatGPT'} Đang Phân Tích Video...` 
-                : `📹 Chọn Video & Phân Tích Bằng ${selectedModel === 'grok' ? 'Grok 4.5' : 'ChatGPT'}`}
+                ? `⏳ ${getModelLabel()} Đang Phân Tích Video...` 
+                : `📹 Chọn Video & Phân Tích Bằng ${getModelLabel()}`}
             </label>
 
             {videoFile && (
@@ -359,7 +411,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.04)', padding: '8px 12px', borderRadius: '8px', fontSize: '0.8rem' }}>
                 <span style={{ color: 'var(--text-muted)' }}>AI Model đã dùng:</span>
-                <span style={{ color: '#c084fc', fontWeight: 700 }}>{videoAnalysisResult.source}</span>
+                <span style={{ color: '#4ade80', fontWeight: 700 }}>{videoAnalysisResult.source}</span>
               </div>
 
               <div className="form-group">
