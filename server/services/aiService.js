@@ -17,14 +17,13 @@ export async function generateAiContent(options = {}) {
   const apiKey = settings.openaiApiKey || process.env.OPENAI_API_KEY;
 
   const userPrompt = prompt.trim() || `Viết bài đăng Facebook chuyên nghiệp về: "${topic}". Tông giọng ${tone}.`;
-  let resultData = null;
-  let source = 'ChatGPT Engine (Built-in)';
+  let apiErrorNotice = null;
 
   // 1. Text Generation (ChatGPT API or Smart Fallback)
-  if (apiKey) {
+  if (apiKey && apiKey.trim()) {
     try {
       const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -38,16 +37,17 @@ export async function generateAiContent(options = {}) {
         temperature: 0.7
       }, {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${apiKey.trim()}`,
           'Content-Type': 'application/json'
         }
       });
 
       const contentText = response.data.choices[0]?.message?.content;
       resultData = JSON.parse(contentText.replace(/```json|```/g, '').trim());
-      source = 'ChatGPT API (OpenAI)';
+      source = 'ChatGPT API (OpenAI gpt-4o-mini)';
     } catch (err) {
-      console.warn('OpenAI API Error, falling back to Smart AI Generator:', err.message);
+      apiErrorNotice = err.response?.data?.error?.message || err.message;
+      console.warn('OpenAI API Error, falling back to Smart AI Generator:', apiErrorNotice);
     }
   }
 
@@ -99,6 +99,7 @@ export async function generateAiContent(options = {}) {
   return {
     success: true,
     source: source,
+    apiErrorNotice: apiErrorNotice,
     data: resultData
   };
 }

@@ -30,7 +30,17 @@ export default function AiContentGenerator({ accounts, onSendToPublisher }) {
       const data = await res.json();
       if (data.success && data.data) {
         setGeneratedData(data.data);
-        setNotice({ type: 'success', text: `Đã sinh xong nội dung từ ${data.source}! Hãy kiểm tra bên dưới.` });
+        if (data.apiErrorNotice) {
+          setNotice({ 
+            type: 'error', 
+            text: `Lưu ý OpenAI Key: ${data.apiErrorNotice} (Hệ thống đã dùng AI dự phòng để bài viết vẫn tạo thành công).` 
+          });
+        } else {
+          setNotice({ 
+            type: 'success', 
+            text: `Đã sinh xong nội dung từ ${data.source}! Hãy kiểm tra bên dưới.` 
+          });
+        }
       } else {
         throw new Error(data.error || 'Không thể tạo nội dung.');
       }
