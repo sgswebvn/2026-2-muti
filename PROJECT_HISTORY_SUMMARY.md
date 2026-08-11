@@ -26,10 +26,8 @@
 ### 💾 B. Sao Lưu & Khôi Phục Dữ Liệu (`BackupModal.jsx`, `db.js`, `index.js`)
 1. **Nút `💾 Backup & Khôi Phục` Trên Thanh Menu**:
    - Mở cửa sổ quản lý sao lưu dữ liệu toàn diện.
-2. **Xuất File Sao Lưu (Export JSON)**:
-   - Tải file `fb_publisher_backup_YYYY-MM-DD.json` chứa danh sách 37+ Fanpage, Access Token đã mã hóa, bài viết, lịch đăng và cài đặt API Keys.
-3. **Nhập File Sao Lưu (Import JSON)**:
-   - Khôi phục dữ liệu tức thì từ file `.json` sao lưu chỉ với 1 click.
+2. **Xuất & Nhập File Sao Lưu (Export/Import JSON)**:
+   - Tải file `fb_publisher_backup_YYYY-MM-DD.json` chứa toàn bộ danh sách 37+ Fanpage, Access Token đã mã hóa, bài viết, lịch đăng bài và **tất cả API Keys (Google Gemini, Grok 4.5, OpenAI ChatGPT, Facebook App Secret)** đã được mã hóa AES-256 an toàn. Khôi phục dữ liệu tức thì chỉ với 1-click.
 
 ### 🔒 C. Loại Bỏ Mã PIN Đăng Nhập
 - Xóa bỏ chức năng mã PIN bảo mật gây phiền phức khi thao tác, giúp mở ứng dụng vào thẳng Dashboard làm việc ngay.

@@ -54,7 +54,7 @@ class JsonDB {
     const rawSettings = this.data.settings || {};
     const settings = {};
     for (const [key, value] of Object.entries(rawSettings)) {
-      if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(key)) {
+      if (['appSecret', 'openaiApiKey', 'grokApiKey', 'geminiApiKey'].includes(key)) {
         settings[key] = decryptText(value);
       } else {
         settings[key] = value;
@@ -71,7 +71,7 @@ class JsonDB {
     for (const [k, v] of Object.entries(newSettings)) {
       if (k === 'isPinConfigured') continue;
       let storeVal = String(v ?? '');
-      if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(k)) {
+      if (['appSecret', 'openaiApiKey', 'grokApiKey', 'geminiApiKey'].includes(k)) {
         storeVal = encryptText(storeVal);
       }
       updated[k] = storeVal;
