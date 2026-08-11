@@ -130,6 +130,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
   const [accountVariations, setAccountVariations] = useState({});
   const [generatingVariations, setGeneratingVariations] = useState(false);
   const [activeVariationPageId, setActiveVariationPageId] = useState(null);
+  const [isVariationModalOpen, setIsVariationModalOpen] = useState(false);
 
   // Generate Multi-Page AI Variations
   const handleGenerateVariations = async () => {
@@ -140,7 +141,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
 
     const targetPages = fbAccounts.filter(a => selectedPageIds.includes(a.id));
     setGeneratingVariations(true);
-    setNotice({ type: 'info', text: `🤖 Đang gọi AI phân tích video & tạo ${targetPages.length} biến thể nội dung độc bản...` });
+    setNotice({ type: 'info', text: `🤖 Đang gọi AI Google Gemini 1.5 phân tích video & tạo ${targetPages.length} biến thể Tiếng Anh độc bản...` });
 
     try {
       const res = await fetch('/api/ai/generate-variations', {
@@ -148,7 +149,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           videoUrl: mediaUrls[0] || '',
+          videoTopic: title || '',
           videoPrompt: caption || title || 'Phân tích video thu hút',
+          originalName: mediaUrls[0]?.split('/')?.pop() || '',
           pageAccounts: targetPages,
           model: 'gemini'
         })
@@ -158,9 +161,10 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
       if (data.success && data.variations) {
         setAccountVariations(data.variations);
         setActiveVariationPageId(targetPages[0]?.id || null);
+        setIsVariationModalOpen(true); // Automatically open variation modal popup
         setNotice({
           type: 'success',
-          text: `🎉 Đã tạo thành công ${Object.keys(data.variations).length} biến thể nội dung độc bản cho ${targetPages.length} Fanpage! (${data.source})`
+          text: `🎉 Đã tạo thành công ${Object.keys(data.variations).length} biến thể phân tích Tiếng Anh cho ${targetPages.length} Fanpage!`
         });
       } else {
         throw new Error(data.error || 'Không thể sinh biến thể AI.');
@@ -433,81 +437,23 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                 onClick={handleGenerateVariations}
                 disabled={generatingVariations}
               >
-                {generatingVariations ? '⏳ AI Đang Sinh Nội Dung...' : `🤖 Sinh ${selectedPageIds.length} Biến Thể AI`}
+                {generatingVariations ? '⏳ Gemini AI Đang Phân Tích...' : `🤖 Sinh ${selectedPageIds.length} Biến Thể AI`}
               </button>
             </div>
 
             {Object.keys(accountVariations).length > 0 && (
-              <div style={{ background: '#0f172a', padding: '14px', borderRadius: '8px', border: '1px solid #334155' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
-                  Danh sách nội dung biến thể theo Fanpage (Bấm để xem & chỉnh sửa):
-                </div>
-
-                {/* Page Selection Tabs */}
-                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '12px' }}>
-                  {fbAccounts.filter(a => selectedPageIds.includes(a.id)).map(acc => {
-                    const isActive = activeVariationPageId === acc.id;
-                    const hasVar = Boolean(accountVariations[acc.id]);
-                    return (
-                      <button
-                        key={acc.id}
-                        type="button"
-                        onClick={() => setActiveVariationPageId(acc.id)}
-                        className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
-                        style={{
-                          fontSize: '0.75rem',
-                          padding: '4px 10px',
-                          whiteSpace: 'nowrap',
-                          border: hasVar ? '1px solid #3b82f6' : '1px dashed #475569'
-                        }}
-                      >
-                        {acc.name} {hasVar ? '✨' : ''}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Active Page Variation Form */}
-                {activeVariationPageId && accountVariations[activeVariationPageId] && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div style={{ fontSize: '0.8rem', color: '#a7f3d0', fontWeight: 600 }}>
-                      Nội dung riêng cho: {fbAccounts.find(a => a.id === activeVariationPageId)?.name}
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tiêu đề biến thể:</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        style={{ fontSize: '0.85rem' }}
-                        value={accountVariations[activeVariationPageId].title || ''}
-                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'title', e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Caption phân tích riêng:</label>
-                      <textarea
-                        className="input-field"
-                        rows={4}
-                        style={{ fontSize: '0.85rem' }}
-                        value={accountVariations[activeVariationPageId].caption || ''}
-                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'caption', e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>First Comment Seeding riêng:</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        style={{ fontSize: '0.85rem' }}
-                        value={accountVariations[activeVariationPageId].firstComment || ''}
-                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'firstComment', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(59, 130, 246, 0.15)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #3b82f6', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '0.825rem', color: '#60a5fa', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  ✨ Đã sinh {Object.keys(accountVariations).length} bản phân tích AI độc bản (Tiếng Anh 100%)
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '4px 12px', fontWeight: 600, background: '#1e293b' }}
+                  onClick={() => setIsVariationModalOpen(true)}
+                >
+                  👁️ Bấm Để Xem & Chỉnh Sửa Biến Thể
+                </button>
               </div>
             )}
           </div>
@@ -987,6 +933,215 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                 onClick={() => setIsGroupModalOpen(false)}
               >
                 ✅ XÁC NHẬN CHỌN ({selectedPageIds.length} FANPAGE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMPACT MODAL POPUP FOR PREVIEWING & EDITING AI VARIATIONS */}
+      {isVariationModalOpen && Object.keys(accountVariations).length > 0 && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div 
+            style={{
+              width: '90vw',
+              maxWidth: '1100px',
+              height: '82vh',
+              background: '#0b1329',
+              border: '1px solid #3b82f6',
+              borderRadius: '16px',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div 
+              style={{ 
+                padding: '20px 24px', 
+                borderBottom: '1px solid #1e293b', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '14px',
+                background: '#0f172a'
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  ✨ BẢNG BIẾN THỂ AI PHÂN TÍCH VIDEO (100% ENGLISH)
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Tự động tạo {Object.keys(accountVariations).length} bản phân tích video Tiếng Anh ngắn gọn (2-3 câu) với các góc nhìn khác nhau cho từng trang.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-primary"
+                  style={{ padding: '8px 20px', fontSize: '0.9rem', fontWeight: 700, background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)' }}
+                  onClick={() => setIsVariationModalOpen(false)}
+                >
+                  ✅ LƯU & DÙNG CÁC BIẾN THỂ NÀY
+                </button>
+
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  style={{ padding: '8px 14px', fontSize: '0.9rem' }}
+                  onClick={() => setIsVariationModalOpen(false)}
+                >
+                  ✕ Đóng
+                </button>
+              </div>
+            </div>
+
+            {/* Fanpage Selection Tabs Bar */}
+            <div 
+              style={{ 
+                padding: '12px 24px', 
+                background: '#1e293b', 
+                borderBottom: '1px solid #334155',
+                display: 'flex',
+                gap: '8px',
+                overflowX: 'auto'
+              }}
+            >
+              {fbAccounts.filter(a => selectedPageIds.includes(a.id)).map(acc => {
+                const isActive = (activeVariationPageId || selectedPageIds[0]) === acc.id;
+                const hasVar = Boolean(accountVariations[acc.id]);
+                return (
+                  <button
+                    key={acc.id}
+                    type="button"
+                    onClick={() => setActiveVariationPageId(acc.id)}
+                    className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{
+                      fontSize: '0.8rem',
+                      padding: '6px 14px',
+                      whiteSpace: 'nowrap',
+                      border: isActive ? '2px solid #3b82f6' : '1px solid #334155'
+                    }}
+                  >
+                    {acc.name} {hasVar ? '✨' : ''}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Modal Body - Editor for Active Page */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '24px', background: '#0b1329' }}>
+              {(() => {
+                const targetPageId = activeVariationPageId || selectedPageIds[0];
+                const activeAccount = fbAccounts.find(a => a.id === targetPageId);
+                const currentVar = accountVariations[targetPageId];
+
+                if (!currentVar) {
+                  return (
+                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      Chưa sinh biến thể cho trang này. Bấm nút "Sinh Biến Thể AI" để tạo.
+                    </div>
+                  );
+                }
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '850px', margin: '0 auto' }}>
+                    <div style={{ background: '#0f172a', padding: '12px 16px', borderRadius: '8px', border: '1px solid #334155', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.9rem', color: '#4ade80', fontWeight: 700 }}>
+                        Trang áp dụng: {activeAccount?.name || targetPageId}
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#60a5fa', background: 'rgba(37,99,235,0.2)', padding: '3px 8px', borderRadius: '4px' }}>
+                        Tự động sinh bởi Google Gemini 1.5 AI
+                      </span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#38bdf8' }}>Tiêu Đề Tiếng Anh (English Title)</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={currentVar.title || ''}
+                        onChange={(e) => updateIndividualVariation(targetPageId, 'title', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#38bdf8' }}>
+                        Nội Dung Phân Tích Video Tiếng Anh (English Video Summary Analysis)
+                      </label>
+                      <textarea
+                        className="input-field"
+                        rows={5}
+                        style={{ lineHeight: '1.6', fontSize: '0.925rem' }}
+                        value={currentVar.caption || ''}
+                        onChange={(e) => updateIndividualVariation(targetPageId, 'caption', e.target.value)}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                        Nội dung Tiếng Anh xúc tích 2-3 câu phân tích chủ đề video (Có thể chỉnh sửa tùy ý).
+                      </span>
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#38bdf8' }}>Hashtags</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={currentVar.hashtags || ''}
+                        onChange={(e) => updateIndividualVariation(targetPageId, 'hashtags', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#38bdf8' }}>First Comment Seeding (English)</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        value={currentVar.firstComment || ''}
+                        onChange={(e) => updateIndividualVariation(targetPageId, 'firstComment', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div 
+              style={{ 
+                padding: '16px 24px', 
+                background: '#0f172a', 
+                borderTop: '1px solid #1e293b', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between' 
+              }}
+            >
+              <div style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
+                Tổng số biến thể: <strong style={{ color: '#4ade80' }}>{Object.keys(accountVariations).length}</strong> bản nội dung Tiếng Anh độc bản
+              </div>
+
+              <button 
+                type="button" 
+                className="btn btn-primary"
+                style={{ padding: '10px 24px', fontSize: '0.95rem', fontWeight: 700 }}
+                onClick={() => setIsVariationModalOpen(false)}
+              >
+                ✅ XÁC NHẬN VÀ LƯU TẤT CẢ BIẾN THỂ
               </button>
             </div>
           </div>
