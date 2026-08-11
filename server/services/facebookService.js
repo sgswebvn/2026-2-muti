@@ -2,6 +2,7 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
+import { fixUtf8Encoding } from '../utils/fontSanitizer.js';
 
 const GRAPH_URL = 'https://graph.facebook.com/v20.0';
 
@@ -165,16 +166,20 @@ export async function autoReplyCustomerComments(pageAccount, postId, autoReplyMe
 export async function publishToFacebook(pageAccount, postData) {
   const { id: pageId, accessToken } = pageAccount;
 
+  const titleClean = fixUtf8Encoding(postData.title || '');
+  const captionClean = fixUtf8Encoding(postData.caption || '');
+  const hashtagsClean = fixUtf8Encoding(postData.hashtags || '');
+
   // Build full text with Title as first paragraph if present
   const textParts = [];
-  if (postData.title && postData.title.trim()) {
-    textParts.push(postData.title.trim());
+  if (titleClean) {
+    textParts.push(titleClean);
   }
-  if (postData.caption && postData.caption.trim()) {
-    textParts.push(postData.caption.trim());
+  if (captionClean) {
+    textParts.push(captionClean);
   }
-  if (postData.hashtags && postData.hashtags.trim()) {
-    textParts.push(postData.hashtags.trim());
+  if (hashtagsClean) {
+    textParts.push(hashtagsClean);
   }
   const fullText = textParts.join('\n\n');
 

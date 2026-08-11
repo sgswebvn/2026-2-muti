@@ -1,244 +1,360 @@
 import axios from 'axios';
+import fs from 'fs';
 import path from 'path';
 import { db } from '../db.js';
+import { fixUtf8Encoding, cleanTitleText } from '../utils/fontSanitizer.js';
+
+/**
+ * List of valid Gemini models to attempt in order of performance
+ */
+const GEMINI_MODELS = [
+  'gemini-3.6-flash',
+  'gemini-2.5-flash',
+  'gemini-flash-latest',
+  'gemini-3.5-flash'
+];
+
+/**
+ * Helper to call Gemini API with model fallback support
+ */
+async function callGeminiApi(apiKey, contents, timeoutMs = 60000) {
+  let lastError = null;
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      console.log(`[Gemini API] Sending request using model: "${modelName}"...`);
+      const response = await axios.post(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+        { contents },
+        { headers: { 'Content-Type': 'application/json' }, timeout: timeoutMs }
+      );
+      if (response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return { success: true, modelUsed: modelName, data: response.data };
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || err.message;
+      console.warn(`[Gemini API Warning] Model "${modelName}" failed:`, msg);
+      lastError = msg;
+    }
+  }
+  throw new Error(`Tất cả các AI Models Gemini đều không thể xử lý: ${lastError}`);
+}
+
+/**
+ * Determine MimeType based on file extension
+ */
+function getMimeType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case '.mp4': return 'video/mp4';
+    case '.mov': return 'video/quicktime';
+    case '.webm': return 'video/webm';
+    case '.avi': return 'video/x-msvideo';
+    case '.mkv': return 'video/x-matroska';
+    case '.3gp': return 'video/3gpp';
+    default: return 'video/mp4';
+  }
+}
+
+/**
+ * Resolve relative mediaUrl (/uploads/media_123.mp4) or raw filename to absolute path on disk
+ */
+function getLocalFilePath(mediaUrlOrName) {
+  if (!mediaUrlOrName) return null;
+
+  let filename = mediaUrlOrName;
+  if (mediaUrlOrName.includes('/uploads/')) {
+    filename = mediaUrlOrName.split('/uploads/').pop();
+  } else if (mediaUrlOrName.includes('\\uploads\\')) {
+    filename = mediaUrlOrName.split('\\uploads\\').pop();
+  }
+  filename = path.basename(filename);
+
+  const filePath = path.resolve('uploads', filename);
+  if (fs.existsSync(filePath)) {
+    return filePath;
+  }
+  return null;
+}
+
+/**
+ * Upload large video to Gemini Files API (/upload/v1beta/files)
+ */
+async function uploadVideoToGemini(filePath, mimeType, apiKey) {
+  try {
+    const fileSize = fs.statSync(filePath).size;
+    console.log(`[Gemini File API] Uploading ${path.basename(filePath)} (${(fileSize / (1024 * 1024)).toFixed(2)} MB)...`);
+
+    // Step 1: Initiate Resumable Upload
+    const initRes = await axios.post(
+      `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+      { file: { display_name: path.basename(filePath) } },
+      {
+        headers: {
+          'X-Goog-Upload-Protocol': 'resumable',
+          'X-Goog-Upload-Command': 'start',
+          'X-Goog-Upload-Header-Content-Length': fileSize.toString(),
+          'X-Goog-Upload-Header-Content-Type': mimeType,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const uploadUrl = initRes.headers['x-goog-upload-url'];
+    if (!uploadUrl) {
+      throw new Error('Could not obtain upload URL from Gemini API');
+    }
+
+    // Step 2: Upload File Bytes
+    const fileStream = fs.readFileSync(filePath);
+    const uploadRes = await axios.post(uploadUrl, fileStream, {
+      headers: {
+        'Content-Length': fileSize.toString(),
+        'X-Goog-Upload-Offset': '0',
+        'X-Goog-Upload-Command': 'upload, finalize'
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity
+    });
+
+    let fileInfo = uploadRes.data?.file;
+    if (!fileInfo || !fileInfo.name) {
+      throw new Error('Failed to retrieve file reference from Gemini Upload API');
+    }
+
+    console.log(`[Gemini File API] File uploaded successfully: ${fileInfo.name}. State: ${fileInfo.state}`);
+
+    // Step 3: Poll if file state is PROCESSING
+    let retries = 0;
+    while (fileInfo.state === 'PROCESSING' && retries < 15) {
+      await new Promise(r => setTimeout(r, 2000));
+      retries++;
+      const pollRes = await axios.get(
+        `https://generativelanguage.googleapis.com/v1beta/${fileInfo.name}?key=${apiKey}`
+      );
+      fileInfo = pollRes.data;
+      console.log(`[Gemini File API] Processing status check ${retries}: ${fileInfo.state}`);
+    }
+
+    if (fileInfo.state !== 'ACTIVE') {
+      throw new Error(`Gemini File processing did not complete. State: ${fileInfo.state}`);
+    }
+
+    return {
+      fileData: {
+        mimeType: mimeType,
+        fileUri: fileInfo.uri
+      }
+    };
+  } catch (err) {
+    console.warn('[Gemini File API Warning]:', err.response?.data?.error?.message || err.message);
+    return null;
+  }
+}
+
+/**
+ * Prepare Gemini Multimodal Video Part (inlineData base64 for <20MB or File API for >=20MB)
+ */
+async function prepareVideoPart(mediaUrlOrName, apiKey) {
+  const filePath = getLocalFilePath(mediaUrlOrName);
+  if (!filePath) {
+    console.warn(`[AI Service] Local video file not found for: "${mediaUrlOrName}".`);
+    return null;
+  }
+
+  const mimeType = getMimeType(filePath);
+  const fileSize = fs.statSync(filePath).size;
+  const sizeInMb = fileSize / (1024 * 1024);
+
+  console.log(`[AI Service] Preparing video media (${sizeInMb.toFixed(2)} MB) for Gemini multimodal analysis...`);
+
+  if (sizeInMb <= 20) {
+    try {
+      const fileBuffer = fs.readFileSync(filePath);
+      const base64Data = fileBuffer.toString('base64');
+      return {
+        inlineData: {
+          mimeType: mimeType,
+          data: base64Data
+        }
+      };
+    } catch (e) {
+      console.warn('[AI Service Base64 Error]:', e.message);
+    }
+  }
+
+  return await uploadVideoToGemini(filePath, mimeType, apiKey);
+}
 
 export async function generateAiContent(options = {}) {
   return analyzeVideoContent(options);
 }
 
-function cleanUtf8Text(str) {
-  if (!str) return '';
-  let text = String(str);
-  text = text
-    .replace(/Â¦/g, '')
-    .replace(/THÃªM/gi, '')
-    .replace(/Â/g, '')
-    .replace(/Ãª/g, 'ê')
-    .replace(/Ã/g, '')
-    .replace(/¦/g, '')
-    .replace(/…/g, ' ');
-  return text;
-}
-
-function extractVideoTopic(rawFilename) {
-  if (!rawFilename) return '30 SECOND ANIMATION ASSIGNMENT';
-
-  let cleaned = rawFilename;
-  try {
-    cleaned = decodeURIComponent(rawFilename);
-  } catch (e) {}
-
-  cleaned = cleanUtf8Text(cleaned);
-  cleaned = cleaned.split('/').pop().split('\\').pop();
-  cleaned = cleaned.replace(/\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i, '');
-
-  cleaned = cleaned
-    .replace(/^YTSave_YouTube_/i, '')
-    .replace(/^media_\d+_[a-zA-Z0-9]+_/i, '')
-    .replace(/^media_\d+_/i, '')
-    .replace(/_Media_[a-zA-Z0-9_-]+/gi, '')
-    .replace(/_\d+p\d*/gi, '')
-    .replace(/\b(full\s*video|full\s*movie|full\s*clip|official\s*video)\b/gi, '')
-    .replace(/\b(https?|ftp):\/\/\S+/gi, '')
-    .replace(/\b(https?|ftp)\s+[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b/gi, '')
-    .replace(/\b[a-zA-Z0-9-]+\.(com|net|org|co|info|news|nows|xyz|online|site|tv|me)\b/gi, '')
-    .replace(/\bhttps?\b/gi, '')
-    .replace(/\b(xem\s*thê\s*m|xem\s*them|see\s*more|read\s*more|click\s*here|xem)\b/gi, '')
-    .replace(/[-_.:|]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleaned || /^(media\s*)?\d+\s*[a-z0-9]*$/i.test(cleaned) || cleaned.length < 3) {
-    return '30 SECOND ANIMATION ASSIGNMENT';
-  }
-
-  return cleaned;
-}
-
+/**
+ * Deep Multimodal Video Content Analysis via Google Gemini (2.5/3.6 Flash)
+ */
 export async function analyzeVideoContent(options = {}) {
-  const { videoUrl = '', originalName = '', videoPrompt = '', model = 'gemini' } = options;
+  const { videoUrl = '', originalName = '', videoPrompt = '' } = options;
   const settings = db.getSettings();
   const geminiApiKey = (settings.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
-  const rawFilename = originalName || videoUrl || '';
-  const videoTopic = extractVideoTopic(rawFilename);
+  const rawTarget = videoUrl || originalName || '';
 
-  console.log('[AI Service] Analyzing video topic: "' + videoTopic + '"');
-
-  if (geminiApiKey) {
-    try {
-      const promptText = 'You are a human video creator. Analyze video topic: "' + videoTopic + '". User prompt: "' + (videoPrompt || 'Write concise English video analysis') + '". Write authentic English social post (2-3 sentences), unique short title, and hashtags. Return raw JSON ONLY: {"englishTitle": "...", "summaryAnalysis": "...", "hashtags": "..."}';
-      const response = await axios.post(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey,
-        { contents: [{ parts: [{ text: promptText }] }] },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 30000 }
-      );
-      const contentText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const cleanJsonStr = contentText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleanJsonStr);
-      if (parsed.summaryAnalysis) {
-        return {
-          success: true,
-          source: 'Google Gemini 1.5 Flash API (Live AI)',
-          englishTitle: parsed.englishTitle || (videoTopic.toUpperCase() + ': OFFICIAL SHOWCASE'),
-          summaryAnalysis: parsed.summaryAnalysis,
-          hashtags: parsed.hashtags || ('#' + videoTopic.replace(/\s+/g, '') + ' #AnimationAssignment #VideoAnalysis')
-        };
-      }
-    } catch (err) {
-      console.warn('[Gemini Live API Warning]:', err.message);
-    }
+  if (!geminiApiKey) {
+    return {
+      success: false,
+      error: 'Vui lòng dán Gemini API Key trong phần Cấu Hình API Keys trước khi phân tích video.'
+    };
   }
 
-  const cleanTag = videoTopic.replace(/[^a-zA-Z0-9]/g, '');
+  try {
+    // 1. Prepare actual Multimodal Video Part (visuals & audio)
+    const videoPart = await prepareVideoPart(rawTarget, geminiApiKey);
+
+    // 2. Build detailed prompt for deep video scene, audio, actor & theme analysis
+    const promptText = `You are a master video curator, entertainment archivist, and viral content strategist.
+
+CRITICAL REQUIREMENT:
+Perform a DEEP, COMPREHENSIVE VISUAL AND AUDIO ANALYSIS of the provided video file:
+1. Identify the exact show/clip name, actors/people involved, comedy sketch or scene setting, actions, dialogue/punchline, and emotional reactions (e.g. ad-libbing, breaking character, funny moments, high-impact action).
+2. DO NOT use generic template text or fallback titles! Every detail MUST come directly from your analysis of what happens in the video.
+
+Tasks:
+1. "englishTitle": Create a punchy, highly specific, authentic English title/headline describing the exact clip content (e.g. "TIM CONWAY'S ELEPHANT STORY THAT BROKE THE CAST | THE CAROL BURNETT SHOW" or specific action headline).
+2. "summaryAnalysis": Write a rich, engaging 3-4 sentence English post caption describing the exact actors/people, the scene context, what happens (the hilarious ad-lib or key visual highlight), and why it's legendary or worth watching.
+3. "hashtags": 4-6 specific hashtags based on the actual identified subject, actors, or theme.
+
+User Prompt Context: "${videoPrompt || 'Deeply analyze this video clip and create an authentic post'}".
+
+Return raw JSON ONLY:
+{"englishTitle": "...", "summaryAnalysis": "...", "hashtags": "..."}`;
+
+    const parts = [];
+    if (videoPart) {
+      parts.push(videoPart);
+    }
+    parts.push({ text: promptText });
+
+    console.log(`[AI Service] Sending deep multimodal video analysis request... (Has Video Part: ${!!videoPart})`);
+
+    const result = await callGeminiApi(geminiApiKey, [{ parts }], 90000);
+
+    const contentText = result.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleanJsonStr = contentText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleanJsonStr);
+
+    if (parsed.summaryAnalysis) {
+      const titleClean = cleanTitleText(parsed.englishTitle || 'EXPLORING THE VIDEO SHOWCASE');
+      const captionClean = fixUtf8Encoding(parsed.summaryAnalysis);
+      const hashtagsClean = fixUtf8Encoding(parsed.hashtags || '#VideoAnalysis #ViralClip');
+
+      return {
+        success: true,
+        source: `Google Gemini Multimodal AI (${result.modelUsed})`,
+        englishTitle: titleClean,
+        summaryAnalysis: captionClean,
+        hashtags: hashtagsClean
+      };
+    }
+  } catch (err) {
+    console.error('[Gemini Video Analysis Error]:', err.message);
+    return {
+      success: false,
+      error: `Lỗi phân tích video: ${err.message}`
+    };
+  }
+
   return {
-    success: true,
-    source: 'Google Gemini 1.5 Flash AI Engine',
-    englishTitle: videoTopic.toUpperCase() + ': OFFICIAL SHOWCASE',
-    summaryAnalysis: 'Exclusive video footage demonstrating ' + videoTopic.toLowerCase() + '. Highlights key performance features, precision handling, and high-impact visual action designed for maximum audience engagement.',
-    hashtags: '#' + (cleanTag || 'Animation') + ' #AnimationAssignment #VideoAnalysis'
+    success: false,
+    error: 'Không nhận được kết quả phân tích hợp lệ từ Gemini API.'
   };
 }
 
+/**
+ * Generate 15+ Unique Fanpage Variations from Multimodal Video Analysis
+ */
 export async function generateMultiPageVariations(options = {}) {
-  const { videoUrl = '', originalName = '', videoPrompt = '', videoTopic: providedTopic = '', pageAccounts = [], model = 'gemini' } = options;
+  const { videoUrl = '', originalName = '', videoPrompt = '', pageAccounts = [] } = options;
   if (!Array.isArray(pageAccounts) || pageAccounts.length === 0) {
-    return { success: false, error: 'Please select at least 1 Fanpage to generate AI variations.' };
+    return { success: false, error: 'Vui lòng chọn ít nhất 1 Fanpage để sinh biến thể nội dung.' };
   }
 
   const settings = db.getSettings();
   const geminiApiKey = (settings.geminiApiKey || process.env.GEMINI_API_KEY || '').trim();
-  const rawFilename = originalName || videoUrl || '';
-  let videoTopic = providedTopic ? extractVideoTopic(providedTopic) : extractVideoTopic(rawFilename);
-  if (!videoTopic || videoTopic === 'Featured Animation Assignment') {
-    videoTopic = '30 SECOND ANIMATION ASSIGNMENT';
+  const rawTarget = videoUrl || originalName || '';
+
+  if (!geminiApiKey) {
+    return { success: false, error: 'Vui lòng dán Gemini API Key trước khi sinh biến thể.' };
   }
 
-  console.log('[AI Service Variations] Using cleaned video topic: "' + videoTopic + '"');
+  try {
+    const videoPart = await prepareVideoPart(rawTarget, geminiApiKey);
+    const pageListDesc = pageAccounts.map(p => `Page ID "${p.id}" (${p.name})`).join('\n');
 
-  if (geminiApiKey) {
-    try {
-      const pageListDesc = pageAccounts.map((p, idx) => 'Page ID "' + p.id + '"').join('\n');
-      const promptText = 'You are an authentic human social media creator. Analyze video topic: "' + videoTopic + '". Context: "' + (videoPrompt || 'Create unique English posts') + '".\n\nWrite ' + pageAccounts.length + ' completely distinct, natural-sounding English Facebook post captions AND 100% UNIQUE DISTINCT TITLES for ' + pageAccounts.length + ' different Facebook pages.\n\nCRITICAL HUMAN WRITING RULES:\n1. Write like a real human creator, NOT an AI bot. Avoid template phrases or repetitive structures.\n2. EVERY PAGE MUST HAVE A COMPLETELY UNIQUE TITLE AND CAPTION. No two pages can share the same title or caption!\n3. Titles must be clean, punchy English headlines focused on "' + videoTopic + '" (e.g., INSIDE ' + videoTopic.toUpperCase() + ', THE ART OF ' + videoTopic.toUpperCase() + ', ' + videoTopic.toUpperCase() + ' VISUAL SHOWCASE). DO NOT use double dashes or ugly boilerplate suffixes!\n4. Keep captions concise (2-3 impact sentences) directly related to the video.\n\nPages:\n' + pageListDesc + '\n\nReturn ONLY raw JSON object:\n{\n  "variations": {\n    "PAGE_ID": {\n      "title": "Unique Punchy English Title",\n      "caption": "Authentic human English post caption",\n      "hashtags": "#Hashtag1 #Hashtag2",\n      "firstComment": "Natural engagement comment"\n    }\n  }\n}';
-      const response = await axios.post(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey,
-        { contents: [{ parts: [{ text: promptText }] }] },
-        { headers: { 'Content-Type': 'application/json' }, timeout: 45000 }
-      );
-      const contentText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const cleanJsonStr = contentText.replace(/```json|```/g, '').trim();
-      const parsed = JSON.parse(cleanJsonStr);
-      if (parsed.variations && Object.keys(parsed.variations).length > 0) {
-        return {
-          success: true,
-          source: 'Google Gemini 1.5 Flash Live API',
-          variations: parsed.variations
-        };
-      }
-    } catch (e) {
-      console.warn('[Gemini Live API Call Note]:', e.message);
+    const promptText = `You are a master social media content creator.
+CRITICAL REQUIREMENT: Analyze the actual visual scenes, dialogue, actors, and action in the attached video clip.
+Write ${pageAccounts.length} COMPLETELY DISTINCT, authentic English Facebook post captions AND 100% UNIQUE DISTINCT TITLES for ${pageAccounts.length} different Facebook pages based on your real video analysis.
+
+RULES:
+1. EVERY SINGLE TITLE AND CAPTION MUST BE GROUNDED IN THE REAL VIDEO ANALYSIS (actors, scene, joke, visual action).
+2. EVERY PAGE MUST HAVE A 100% UNIQUE TITLE AND CAPTION. No two pages can share the same title or caption!
+3. Keep titles punchy, clean English headlines without boilerplate noise or ugly double dashes.
+4. Keep captions concise (2-3 impact sentences) directly related to the specific details of the video clip.
+
+Pages to generate for:
+${pageListDesc}
+
+User prompt: "${videoPrompt || 'Create authentic post variations'}"
+
+Return ONLY raw JSON object:
+{
+  "variations": {
+    "PAGE_ID": {
+      "title": "Unique Punchy English Title",
+      "caption": "Authentic post caption describing the real video content",
+      "hashtags": "#Hashtag1 #Hashtag2",
+      "firstComment": "Natural engagement comment"
     }
   }
+}`;
 
-  const variations = {};
-  const topicUpper = videoTopic.toUpperCase();
-  const humanTitles = [
-    topicUpper + ': OFFICIAL SHOWCASE',
-    'INSIDE ' + topicUpper,
-    'THE ART OF ' + topicUpper,
-    topicUpper + ' VISUAL BREAKDOWN',
-    'EXPLORING ' + topicUpper,
-    topicUpper + ' IN MOTION',
-    'HIGHLIGHTS FROM ' + topicUpper,
-    topicUpper + ' CREATIVE SPOTLIGHT',
-    topicUpper + ' UNFILTERED LOOK',
-    'THE MECHANICS OF ' + topicUpper,
-    topicUpper + ' PERFORMANCE REEL',
-    topicUpper + ' AESTHETIC REVIEW',
-    'BEHIND THE SCENES OF ' + topicUpper,
-    topicUpper + ' DYNAMIC SEQUENCE',
-    topicUpper + ' DEFINITIVE CUT'
-  ];
+    const parts = [];
+    if (videoPart) {
+      parts.push(videoPart);
+    }
+    parts.push({ text: promptText });
 
-  const humanHooks = [
-    'Exclusive video footage demonstrating',
-    'Here is an impressive visual breakdown of',
-    'Taking a closer look at',
-    'Check out this incredible dynamic sequence from',
-    'Exploring the creative mechanics behind',
-    'An in-depth showcase highlighting',
-    'Witnessing high-level execution in this clip of',
-    'Breaking down the key visual elements of',
-    'A fresh perspective on',
-    'Unpacking the dynamic motion and timing in',
-    'A masterclass in visual storytelling featuring',
-    'Behind-the-scenes look at the motion design of',
-    'Experience the rapid energy and pacing in',
-    'A spotlight on the fine details of',
-    'Delivering peak performance and visual impact in'
-  ];
+    console.log(`[AI Variations] Generating ${pageAccounts.length} multimodal video variations with Gemini...`);
 
-  const humanAngles = [
-    'Highlights key performance features, precision handling, and high-impact visual action designed for maximum audience engagement.',
-    'Captures fluid motion pacing, dynamic timing, and immersive visual storytelling tailored for digital audiences.',
-    'Demonstrates smooth transitions, high-definition visual effects, and top-tier execution throughout the sequence.',
-    'Packed with high-octane visual sequences and eye-catching details crafted to capture instant attention.',
-    'Details peak performance elements, sharp responsiveness, and standout visual design from start to finish.',
-    'Features intricate motion details, impressive clarity, and seamless presentation across every frame.',
-    'Highlights artistic finesse, energetic visual rhythm, and top-tier presentation quality for creative communities.',
-    'Delivers rapid motion flow, bold aesthetic choices, and unmatched spectator appeal.',
-    'Tailored for video enthusiasts seeking top-notch artistry and clean motion execution.',
-    'Blends razor-sharp responsiveness with vivid visual aesthetics for an unforgettable viewing experience.',
-    'Explores cutting-edge visual techniques crafted to inspire creator communities with fresh perspectives.',
-    'Short, sharp, and impactful footage delivering immediate visual payoff and memorable sequence highlights.',
-    'Emphasizes refined visual textures, crisp resolution, and bold creative direction.',
-    'Packed with visual momentum, crisp clarity, and standout presentation energy.',
-    'Combines high-level technical execution with irresistible visual rhythm and motion flair.'
-  ];
+    const result = await callGeminiApi(geminiApiKey, [{ parts }], 120000);
 
-  const humanComments = [
-    'Drop a comment below and let us know your favorite scene from this clip!',
-    'What do you think about the pacing in this video clip? Share your thoughts!',
-    'Rate this video execution from 1 to 10 in the comments below!',
-    'Tag a friend who needs to watch this clip right now!',
-    'Leave your feedback below - we would love to hear what you think!',
-    'Which detail stood out to you the most? Let us know in the comments!',
-    'Save this post and comment below for more exclusive video updates!',
-    'Are you impressed by this sequence? Drop your feedback below!',
-    'Comment your thoughts below and stay tuned for more showcase clips!',
-    'What was your favorite moment in this clip? Share with us below!',
-    'How would you rate this creative motion style? Tell us below!',
-    'Like this post if you enjoyed this clip and leave a quick comment!',
-    'What visual element caught your eye first? Comment your take below!',
-    'Let us know in the comments how this video sequence felt to you!',
-    'What rating would you give this clip? Let us know in the comment section!'
-  ];
+    const contentText = result.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const cleanJsonStr = contentText.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleanJsonStr);
 
-  const topicClean = videoTopic.replace(/[^a-zA-Z0-9]/g, '');
-  pageAccounts.forEach((page, idx) => {
-    const title = humanTitles[idx % humanTitles.length];
-    const hook = humanHooks[idx % humanHooks.length];
-    const angle = humanAngles[idx % humanAngles.length];
-    const comment = humanComments[idx % humanComments.length];
-    const pageClean = page.name.replace(/[^a-zA-Z0-9]/g, '');
+    if (parsed.variations && Object.keys(parsed.variations).length > 0) {
+      const cleanedVariations = {};
+      for (const [pageId, varObj] of Object.entries(parsed.variations)) {
+        cleanedVariations[pageId] = {
+          title: cleanTitleText(varObj.title || 'EXCLUSIVE VIDEO HIGHLIGHT'),
+          caption: fixUtf8Encoding(varObj.caption || ''),
+          hashtags: fixUtf8Encoding(varObj.hashtags || '#VideoShowcase'),
+          firstComment: fixUtf8Encoding(varObj.firstComment || 'Drop a comment below!')
+        };
+      }
 
-    const caption = hook + ' ' + videoTopic.toLowerCase() + '. ' + angle;
-    const hashtags = '#' + (topicClean || 'Video') + ' #' + (pageClean || 'Page') + ' #Animation #VideoAnalysis';
+      return {
+        success: true,
+        source: `Google Gemini Multimodal AI (${result.modelUsed})`,
+        variations: cleanedVariations
+      };
+    }
+  } catch (e) {
+    console.error('[Gemini Multimodal Variations Error]:', e.message);
+    return { success: false, error: e.message };
+  }
 
-    variations[page.id] = {
-      title,
-      caption,
-      hashtags,
-      firstComment: comment
-    };
-  });
-
-  return {
-    success: true,
-    source: 'Google Gemini 1.5 Flash AI Engine (Human Style)',
-    variations
-  };
+  return { success: false, error: 'Không thể khởi tạo biến thể từ Gemini API.' };
 }
 
 export async function suggestAiCommentReply(customerComment, postTopic = '') {
-  return 'Thank you for reaching out! We have sent you a direct message with full details. Please check your inbox!';
+  return fixUtf8Encoding('Thank you for reaching out! We have sent you a direct message with full details. Please check your inbox!');
 }

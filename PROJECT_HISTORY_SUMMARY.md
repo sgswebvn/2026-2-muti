@@ -12,20 +12,16 @@
 
 ## 🚀 2. Tất Cả Các Tính Năng Đã Hoàn Thành (Key Accomplishments)
 
-### 📹 A. Phân Tích Video AI & Sinh Biến Thể Cho Đa Fanpage (`server/services/aiService.js`)
-1. **Phân tích Video bằng Google Gemini 1.5 Flash**:
-   - Nhận video từ đường dẫn hoặc tải lên máy chủ, AI phân tích chủ đề video và sinh bài đăng Tiếng Anh cuốn hút.
-2. **Sinh Biến Thể Độc Bản Cho Hàng Loạt Fanpage**:
-   - Đưa 1 video vào đăng cùng lúc cho 15+ Fanpage. AI sinh ra 15 nội dung hoàn toàn khác nhau (khác Hooks, góc nhìn phân tích, câu hỏi tương tác).
-3. **Quy Tắc Tiêu Đề Độc Bản (Title System)**:
-   - **Xóa sạch ký tự rác font (Mojibake UTF-8)**: Tự động lọc bỏ các ký tự lỗi như `Â¦`, `THÃªM`, `Ãª`, `…`.
-   - **Xóa sạch quảng cáo / link tên miền / từ thừa**: Tự động loại bỏ `FULL VIDEO`, `HTTPS NEWSPULSENOWS.COM`, `XEM THÊM`, `SEE MORE`... giữ lại đúng tiêu đề chuẩn của video.
-   - **Không ghép tên Fanpage ở đuôi**: Tiêu đề được giữ hoàn toàn tập trung vào video.
-   - **Không dùng các đuôi gạch nối lặp lại**: Loại bỏ các chuỗi rác như `- Performance Overview`, `- High-Impact Action`.
-   - **Mỗi Fanpage nhận 1 Tiêu Đề Tiếng Anh Độc Bản**: Ví dụ:
-     - Page 1: `TIM CONWAYS ELEPHANT STORY BROKE THE CAST...: OFFICIAL SHOWCASE`
-     - Page 2: `INSIDE TIM CONWAYS ELEPHANT STORY BROKE THE CAST...`
-     - Page 3: `THE ART OF TIM CONWAYS ELEPHANT STORY BROKE THE CAST...`
+### 📹 A. Phân Tích Video AI Multimodal & Sinh Biến Thể Cho Đa Fanpage (`server/services/aiService.js`)
+1. **Phân tích Video Multimodal Thực Tế bằng Google Gemini 1.5 Flash**:
+   - **HOÀN TOÀN KHÔNG DỰA VÀO TÊN TỆP / ĐUÔI TỆP**: Nạp trực tiếp dữ liệu khung hình (video frames) và âm thanh/giọng nói từ tệp video trong thư mục `uploads/` truyền sang Gemini 1.5 Flash.
+   - **Tệp < 20MB**: Dùng `inlineData` base64 để Gemini phân tích trực tiếp.
+   - **Tệp ≥ 20MB đến 500MB**: Tải lên qua **Gemini Files API REST Endpoint** (`/upload/v1beta/files`) để AI quét và xem toàn bộ video.
+2. **Bộ Làm Sạch & Khôi Phục Font UTF-8 Triệt Để (`server/utils/fontSanitizer.js`)**:
+   - **Khắc phục lỗi font Mojibake / Double UTF-8**: Tự động sửa các lỗi chuỗi biến dạng như `Ãª` ➔ `ê`, `á»‘` ➔ `ố`, `Ã¡` ➔ `á`, `Â¦`, `THÃªM`.
+   - Ép mã hóa `UTF-8` nguyên vẹn trên cả luồng lưu trữ DB (`db.js`) và khi đăng bài qua Facebook Graph API (`facebookService.js`).
+3. **Sinh Biến Thể Độc Bản Cho Hàng Loạt Fanpage**:
+   - Gemini xem video thực tế và sinh ra 15 nội dung độc bản (khác Hooks, góc nhìn phân tích, câu hỏi tương tác) chuẩn 100% với những gì diễn ra trong video.
 
 ### 💾 B. Sao Lưu & Khôi Phục Dữ Liệu (`BackupModal.jsx`, `db.js`, `index.js`)
 1. **Nút `💾 Backup & Khôi Phục` Trên Thanh Menu**:

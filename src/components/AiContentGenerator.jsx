@@ -156,7 +156,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
               <Video color="#38bdf8" size={24} /> Phân Tích Video Bằng AI & Đăng Bài Facebook Tự Động
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-              Chỉ cần upload video của bạn, AI sẽ tự động phân tích nội dung, trích xuất <strong>Tiêu Đề Tiếng Anh (English Title)</strong> và tạo bài viết để đăng ngay lên Facebook Fanpage.
+              Upload video của bạn, AI Gemini 1.5 Flash Multimodal sẽ <strong>trực tiếp xem khung hình & phân tích âm thanh/nội dung thực tế trong video</strong> để sinh <strong>Tiêu Đề Tiếng Anh (English Title)</strong> và bài viết chuẩn xác 100% không bị vỡ font.
             </p>
           </div>
 
@@ -380,7 +380,7 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
               }}
             >
               {analyzingVideo 
-                ? `⏳ ${getModelLabel()} Đang Phân Tích Video...` 
+                ? `⏳ ${getModelLabel()} Đang Phân Tích Khung Hình Video...` 
                 : `📹 Chọn Video & Phân Tích Bằng ${getModelLabel()}`}
             </label>
 
