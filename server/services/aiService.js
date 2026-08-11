@@ -6,24 +6,49 @@ export async function generateAiContent(options = {}) {
   return analyzeVideoContent(options);
 }
 
+function cleanUtf8Text(str) {
+  if (!str) return '';
+  let text = String(str);
+  text = text
+    .replace(/Â¦/g, '')
+    .replace(/THÃªM/gi, '')
+    .replace(/Â/g, '')
+    .replace(/Ãª/g, 'ê')
+    .replace(/Ã/g, '')
+    .replace(/¦/g, '')
+    .replace(/…/g, ' ');
+  return text;
+}
+
 function extractVideoTopic(rawFilename) {
   if (!rawFilename) return '30 SECOND ANIMATION ASSIGNMENT';
 
-  let cleaned = rawFilename.split('/').pop().split('\\').pop();
+  let cleaned = rawFilename;
+  try {
+    cleaned = decodeURIComponent(rawFilename);
+  } catch (e) {}
+
+  cleaned = cleanUtf8Text(cleaned);
+  cleaned = cleaned.split('/').pop().split('\\').pop();
+  cleaned = cleaned.replace(/\.(mp4|mov|avi|mkv|webm|flv|wmv|m4v)$/i, '');
 
   cleaned = cleaned
     .replace(/^YTSave_YouTube_/i, '')
     .replace(/^media_\d+_[a-zA-Z0-9]+_/i, '')
-    .replace(/^media_\d+_[a-zA-Z0-9]+\./i, '.')
     .replace(/^media_\d+_/i, '')
     .replace(/_Media_[a-zA-Z0-9_-]+/gi, '')
     .replace(/_\d+p\d*/gi, '')
-    .replace(/\.[^/.]+$/, '')
-    .replace(/[-_]/g, ' ')
+    .replace(/\b(full\s*video|full\s*movie|full\s*clip|official\s*video)\b/gi, '')
+    .replace(/\b(https?|ftp):\/\/\S+/gi, '')
+    .replace(/\b(https?|ftp)\s+[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+\b/gi, '')
+    .replace(/\b[a-zA-Z0-9-]+\.(com|net|org|co|info|news|nows|xyz|online|site|tv|me)\b/gi, '')
+    .replace(/\bhttps?\b/gi, '')
+    .replace(/\b(xem\s*thê\s*m|xem\s*them|see\s*more|read\s*more|click\s*here|xem)\b/gi, '')
+    .replace(/[-_.:|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (/^(media\s*)?\d+\s*[a-z0-9]+$/i.test(cleaned) || cleaned.length < 3) {
+  if (!cleaned || /^(media\s*)?\d+\s*[a-z0-9]*$/i.test(cleaned) || cleaned.length < 3) {
     return '30 SECOND ANIMATION ASSIGNMENT';
   }
 
@@ -41,7 +66,7 @@ export async function analyzeVideoContent(options = {}) {
 
   if (geminiApiKey) {
     try {
-      const promptText = 'You are a human video creator. Analyze video: "' + videoTopic + '". User prompt: "' + (videoPrompt || 'Write concise English video analysis') + '". Write authentic English social post (2-3 sentences), unique short title, and hashtags. Return raw JSON ONLY: {"englishTitle": "...", "summaryAnalysis": "...", "hashtags": "..."}';
+      const promptText = 'You are a human video creator. Analyze video topic: "' + videoTopic + '". User prompt: "' + (videoPrompt || 'Write concise English video analysis') + '". Write authentic English social post (2-3 sentences), unique short title, and hashtags. Return raw JSON ONLY: {"englishTitle": "...", "summaryAnalysis": "...", "hashtags": "..."}';
       const response = await axios.post(
         'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=' + geminiApiKey,
         { contents: [{ parts: [{ text: promptText }] }] },
