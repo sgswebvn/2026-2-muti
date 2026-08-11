@@ -292,6 +292,77 @@ class JsonDB {
   getLogs(limit = 100) {
     return (this.data.logs || []).slice(0, limit);
   }
+
+  // ================= BACKUP IMPORT / EXPORT ================= //
+
+  exportBackupData() {
+    const accounts = this.getAccounts();
+    const settings = this.getSettings();
+    const posts = this.getPosts();
+    const logs = this.getLogs();
+
+    return {
+      version: '1.0',
+      exportedAt: new Date().toISOString(),
+      appName: 'Facebook Multi-Publisher All-in-One',
+      counts: {
+        accounts: accounts.length,
+        posts: posts.length
+      },
+      accounts,
+      settings,
+      posts,
+      logs
+    };
+  }
+
+  importBackupData(backupData) {
+    if (!backupData || typeof backupData !== 'object') {
+      throw new Error('Dữ liệu tệp sao lưu không hợp lệ.');
+    }
+
+    let restoredAccountsCount = 0;
+    let restoredPostsCount = 0;
+
+    // Restore accounts if provided
+    if (Array.isArray(backupData.accounts)) {
+      backupData.accounts.forEach(acc => {
+        if (acc && acc.id) {
+          this.saveAccount(acc);
+          restoredAccountsCount++;
+        }
+      });
+    }
+
+    // Restore posts if provided
+    if (Array.isArray(backupData.posts)) {
+      backupData.posts.forEach(post => {
+        if (post && post.id) {
+          const existingIndex = this.data.posts.findIndex(p => p.id === post.id);
+          if (existingIndex >= 0) {
+            this.data.posts[existingIndex] = { ...this.data.posts[existingIndex], ...post };
+          } else {
+            this.data.posts.unshift(post);
+          }
+          restoredPostsCount++;
+        }
+      });
+    }
+
+    // Restore settings if provided
+    if (backupData.settings && typeof backupData.settings === 'object') {
+      this.saveSettings(backupData.settings);
+    }
+
+    this.saveData();
+
+    return {
+      success: true,
+      restoredAccountsCount,
+      restoredPostsCount,
+      message: `Đã khôi phục thành công ${restoredAccountsCount} Fanpage và ${restoredPostsCount} bài viết từ bản sao lưu!`
+    };
+  }
 }
 
 export const db = new JsonDB();

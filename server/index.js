@@ -400,6 +400,30 @@ app.post('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
   }
 });
 
+// ==================== BACKUP IMPORT & EXPORT API ==================== //
+
+app.get('/api/backup/export', (req, res) => {
+  try {
+    const backupData = db.exportBackupData();
+    const fileName = `fb_publisher_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.json(backupData);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/backup/import', (req, res) => {
+  try {
+    const backupData = req.body;
+    const result = db.importBackupData(backupData);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Catch-all route to serve index.html for SPA if dist exists
 if (fs.existsSync(DIST_DIR)) {
   app.get('*', (req, res) => {

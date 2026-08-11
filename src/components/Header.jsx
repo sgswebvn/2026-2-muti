@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Header({ activeTab, setActiveTab, accountCount, onOpenGuide }) {
+export default function Header({ activeTab, setActiveTab, accountCount, onOpenGuide, onOpenBackup }) {
   return (
     <header className="glass-card app-header" style={{ padding: '14px 20px', marginBottom: '20px' }}>
       <div className="brand">
@@ -46,6 +46,14 @@ export default function Header({ activeTab, setActiveTab, accountCount, onOpenGu
           onClick={() => setActiveTab('history')}
         >
           <span>Lịch Sử Bài Đăng</span>
+        </button>
+
+        <button
+          className="tab-btn"
+          style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)', color: '#ffffff', border: '1px solid #60a5fa', fontWeight: 600 }}
+          onClick={onOpenBackup}
+        >
+          <span>💾 Backup & Khôi Phục</span>
         </button>
 
         <button
