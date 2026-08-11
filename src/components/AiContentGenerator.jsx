@@ -384,9 +384,17 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
                 : `📹 Chọn Video & Phân Tích Bằng ${getModelLabel()}`}
             </label>
 
-            {videoFile && (
-              <div style={{ marginTop: '12px', fontSize: '0.8rem', color: '#60a5fa', fontWeight: 600 }}>
-                📁 Tệp video đang chọn: {videoFile.name}
+            {videoUrl && (
+              <div style={{ marginTop: '14px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.8rem', color: '#60a5fa', fontWeight: 600, marginBottom: '8px' }}>
+                  📁 Tệp video đang chọn: {videoFile?.name || videoUrl.split('/').pop()}
+                </div>
+                <video 
+                  src={videoUrl} 
+                  controls 
+                  playsInline
+                  style={{ width: '100%', maxHeight: '380px', borderRadius: '8px', background: '#000', objectFit: 'contain', border: '1px solid #334155' }} 
+                />
               </div>
             )}
           </div>

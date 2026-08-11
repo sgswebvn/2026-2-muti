@@ -639,13 +639,14 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           {mediaUrls.length > 0 ? (
             <div 
               style={{ 
-                borderRadius: '6px', 
+                borderRadius: '8px', 
                 overflow: 'hidden', 
                 background: '#0f172a',
                 display: 'grid',
                 gridTemplateColumns: (mediaUrls.length > 1 && mediaType !== 'video') ? '1fr 1fr' : '1fr',
-                gap: '4px',
-                maxHeight: '320px'
+                gap: '6px',
+                maxHeight: '520px',
+                width: '100%'
               }}
             >
               {mediaUrls.slice(0, 4).map((url, idx) => {
@@ -659,14 +660,14 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                     loop 
                     muted 
                     playsInline
-                    style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', background: '#000' }} 
+                    style={{ width: '100%', maxHeight: '480px', borderRadius: '6px', objectFit: 'contain', background: '#000' }} 
                   />
                 ) : (
                   <img 
                     key={idx}
                     src={url} 
                     alt="" 
-                    style={{ width: '100%', height: mediaUrls.length > 1 ? '140px' : '260px', objectFit: 'cover' }} 
+                    style={{ width: '100%', height: mediaUrls.length > 1 ? '160px' : '380px', objectFit: 'cover' }} 
                   />
                 );
               })}
