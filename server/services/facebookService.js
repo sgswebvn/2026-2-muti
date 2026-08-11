@@ -333,19 +333,37 @@ export async function publishToFacebook(pageAccount, postData) {
 
     throw new Error('Loại media không được hỗ trợ cho Facebook');
   } catch (error) {
-    const errorDetails = error.response?.data?.error?.message || error.message;
+    const errObj = error.response?.data?.error;
+    const errorDetails = errObj?.message || error.message;
+    const errorSubcode = errObj?.error_subcode;
+    const errorCode = errObj?.code;
+
     console.error('Facebook Publishing Error:', error.response?.data || error.message);
+
+    let isCheckpoint = false;
+    if (errorSubcode === 459 || errorSubcode === 458 || errorSubcode === 490 || errorCode === 190) {
+      if (/checkpoint|identity|verify|locked/i.test(errorDetails) || errorSubcode === 459) {
+        isCheckpoint = true;
+      }
+    }
+
+    const formattedError = isCheckpoint
+      ? `🚨 Lỗi Xác Minh Danh Tính (Checkpoint ${errorSubcode || 459}): Tài khoản Facebook bị tạm khóa hoặc yêu cầu xác minh danh tính. Vui lòng đăng nhập facebook.com trên trình duyệt để mở khóa.`
+      : `Facebook Error: ${errorDetails}`;
+
     return {
       success: false,
-      error: `Facebook Error: ${errorDetails}`
+      isCheckpoint,
+      error: formattedError
     };
   }
 }
 
 /**
- * Verify Access Token Status
+ * Verify Access Token Status (With Checkpoint 459/458 Detection)
  */
-export async function checkTokenHealth(accessToken) {
+export async function checkTokenHealth(accountOrToken) {
+  const accessToken = typeof accountOrToken === 'string' ? accountOrToken : accountOrToken?.accessToken;
   try {
     const res = await axios.get(`${GRAPH_URL}/me`, {
       params: {
@@ -354,12 +372,29 @@ export async function checkTokenHealth(accessToken) {
       }
     });
     if (res.data && res.data.id) {
-      return { valid: true, id: res.data.id, name: res.data.name };
+      return { status: 'active', valid: true, id: res.data.id, name: res.data.name };
     }
-    return { valid: false, error: 'Phản hồi từ Facebook không hợp lệ' };
+    return { status: 'invalid', valid: false, error: 'Phản hồi từ Facebook không hợp lệ' };
   } catch (err) {
-    const msg = err.response?.data?.error?.message || err.message;
-    return { valid: false, error: msg };
+    const errObj = err.response?.data?.error;
+    const msg = errObj?.message || err.message;
+    const subcode = errObj?.error_subcode;
+    const code = errObj?.code;
+
+    if (subcode === 459 || subcode === 458 || subcode === 490 || /checkpoint|identity|verify|locked/i.test(msg)) {
+      return {
+        status: 'checkpoint',
+        valid: false,
+        isCheckpoint: true,
+        error: `Tài khoản cần xác minh danh tính (Checkpoint Subcode ${subcode || 459}). Đăng nhập facebook.com để mở khóa.`
+      };
+    }
+
+    if (code === 190 || subcode === 463 || subcode === 467) {
+      return { status: 'expired', valid: false, error: `Access Token hết hạn (${msg})` };
+    }
+
+    return { status: 'invalid', valid: false, error: msg };
   }
 }
 

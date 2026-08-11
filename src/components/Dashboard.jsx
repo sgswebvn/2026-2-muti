@@ -121,7 +121,9 @@ export default function Dashboard({ posts = [], accounts = [], onNavigate }) {
                     </div>
 
                     <div>
-                      {isInvalid ? (
+                      {acc.tokenStatus === 'checkpoint' ? (
+                        <span style={{ fontSize: '0.75rem', color: '#ef4444', fontWeight: 700 }}>🚨 Cần Xác Minh Danh Tính</span>
+                      ) : isInvalid ? (
                         <span style={{ fontSize: '0.75rem', color: '#f87171', fontWeight: 600 }}>Lỗi Token</span>
                       ) : (
                         <span style={{ fontSize: '0.75rem', color: '#4ade80', fontWeight: 600 }}>Hoạt động</span>

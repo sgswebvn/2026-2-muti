@@ -40,18 +40,36 @@ export async function executePostPublish(postId) {
 
   let successCount = 0;
 
-  for (const pageAcc of targetPages) {
-    const res = await publishToFacebook(pageAcc, post);
+  for (let i = 0; i < targetPages.length; i++) {
+    const pageAcc = targetPages[i];
+
+    // Check if there is a unique AI variation for this specific Fanpage
+    const customPostPayload = (post.accountVariations && post.accountVariations[pageAcc.id])
+      ? { ...post, ...post.accountVariations[pageAcc.id] }
+      : post;
+
+    const res = await publishToFacebook(pageAcc, customPostPayload);
+
+    // If checkpoint error is returned, update account tokenStatus in DB
+    if (res?.isCheckpoint) {
+      db.updateAccountStatus(pageAcc.id, 'facebook', 'checkpoint', res.error);
+    }
 
     results[`facebook_${pageAcc.id}`] = {
       accountName: pageAcc.name,
       platform: 'facebook',
       pageId: pageAcc.id,
+      usedVariation: Boolean(post.accountVariations && post.accountVariations[pageAcc.id]),
       ...res
     };
 
     if (res?.success) {
       successCount++;
+    }
+
+    // Rate-limiting delay: 2 seconds between multiple target pages to prevent Facebook bulk-posting spam / checkpoint triggers
+    if (targetPages.length > 1 && i < targetPages.length - 1) {
+      await new Promise(r => setTimeout(r, 2000));
     }
   }
 
@@ -69,3 +87,4 @@ export async function executePostPublish(postId) {
     results
   };
 }
+

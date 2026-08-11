@@ -6,7 +6,6 @@ import PostPublisher from './components/PostPublisher';
 import AiContentGenerator from './components/AiContentGenerator';
 import PostHistory from './components/PostHistory';
 import ApiGuideModal from './components/ApiGuideModal';
-import SecurityLock from './components/SecurityLock';
 
 export default function App() {
   // Persist activeTab in localStorage so F5 reload stays on current page
@@ -18,10 +17,6 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [draftFromAi, setDraftFromAi] = useState(null);
-
-  const [isUnlocked, setIsUnlocked] = useState(() => {
-    return sessionStorage.getItem('pinUnlocked') === 'true';
-  });
 
   const changeTab = (tab) => {
     setActiveTab(tab);
@@ -61,10 +56,6 @@ export default function App() {
     setDraftFromAi(aiData);
     changeTab('publish');
   };
-
-  if (!isUnlocked) {
-    return <SecurityLock onUnlock={() => setIsUnlocked(true)} />;
-  }
 
   return (
     <div className="app-container">

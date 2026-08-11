@@ -8,7 +8,7 @@ import { exchangeForLongLivedToken, getFacebookPages } from './services/accountS
 import { executePostPublish } from './services/postPublisher.js';
 import { initScheduler } from './services/scheduler.js';
 import { checkTokenHealth, getPageRoles, assignPageRole, getPostLiveComments, postCommentReply } from './services/facebookService.js';
-import { generateAiContent, suggestAiCommentReply, analyzeVideoContent } from './services/aiService.js';
+import { generateAiContent, suggestAiCommentReply, analyzeVideoContent, generateMultiPageVariations } from './services/aiService.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -111,8 +111,8 @@ app.get('/api/settings', (req, res) => {
 });
 
 app.post('/api/settings', (req, res) => {
-  const { appId, appSecret, openaiApiKey, grokApiKey } = req.body;
-  const settings = db.saveSettings({ appId, appSecret, openaiApiKey, grokApiKey });
+  const { appId, appSecret, openaiApiKey, grokApiKey, geminiApiKey } = req.body;
+  const settings = db.saveSettings({ appId, appSecret, openaiApiKey, grokApiKey, geminiApiKey });
   const { securityPin, ...safeSettings } = settings;
   res.json({ success: true, settings: safeSettings });
 });
@@ -271,6 +271,7 @@ app.post('/api/posts', (req, res) => {
       mediaType, 
       postFormat,
       targetAccountIds, 
+      accountVariations,
       publishNow, 
       scheduledAt 
     } = req.body;
@@ -287,6 +288,7 @@ app.post('/api/posts', (req, res) => {
       postFormat,
       platforms: ['facebook'],
       targetAccountIds: targetAccountIds || [],
+      accountVariations: accountVariations || {},
       scheduledAt
     });
 
@@ -342,6 +344,15 @@ app.post('/api/ai/generate', async (req, res) => {
 app.post('/api/ai/analyze-video', async (req, res) => {
   try {
     const result = await analyzeVideoContent(req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/ai/generate-variations', async (req, res) => {
+  try {
+    const result = await generateMultiPageVariations(req.body);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

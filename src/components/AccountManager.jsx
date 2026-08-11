@@ -516,7 +516,11 @@ export default function AccountManager({ accounts, fetchAccounts, posts = [], fe
                           Nhóm: {currentGroup} ✎
                         </span>
 
-                        {isInvalid ? (
+                        {acc.tokenStatus === 'checkpoint' ? (
+                          <span style={{ fontSize: '0.7rem', color: '#ef4444', background: 'rgba(239,68,68,0.2)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }} title="Đăng nhập facebook.com trên trình duyệt để mở khóa checkpoint">
+                            🚨 Cần Xác Minh Danh Tính
+                          </span>
+                        ) : isInvalid ? (
                           <span style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 600 }}>Lỗi Token</span>
                         ) : (
                           <span style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 600 }}>Hoạt Động</span>

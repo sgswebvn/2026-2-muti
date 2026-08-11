@@ -1,216 +1,84 @@
-import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import { encryptText, decryptText } from './utils/cryptoUtils.js';
 
 const DATA_DIR = path.resolve('data');
-const DB_FILE = path.join(DATA_DIR, 'app.db');
-const JSON_DB_FILE = path.join(DATA_DIR, 'db.json');
+const DB_FILE = path.join(DATA_DIR, 'db.json');
 
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-class SQLiteDB {
+class JsonDB {
   constructor() {
-    this.db = new Database(DB_FILE);
-    // Enable PRAGMA for WAL mode for high performance
-    this.db.pragma('journal_mode = WAL');
-    this.initTables();
-    this.migrateFromJsonIfPresent();
+    this.data = {
+      settings: {},
+      accounts: [],
+      posts: [],
+      logs: []
+    };
+    this.loadData();
   }
 
-  initTables() {
-    // Settings table (Key-Value)
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT,
-        updatedAt TEXT
-      );
-    `);
-
-    // Accounts table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS accounts (
-        id TEXT NOT NULL,
-        platform TEXT NOT NULL,
-        name TEXT,
-        accessToken TEXT,
-        avatar TEXT,
-        accountGroup TEXT DEFAULT 'Mặc định',
-        tokenStatus TEXT DEFAULT 'active',
-        tokenError TEXT,
-        lastCheckedAt TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        PRIMARY KEY (id, platform)
-      );
-    `);
-
-    // Posts table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS posts (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        caption TEXT,
-        hashtags TEXT,
-        firstComment TEXT,
-        autoReplyMessage TEXT,
-        mediaUrl TEXT,
-        mediaUrls TEXT,
-        mediaType TEXT DEFAULT 'image',
-        postFormat TEXT DEFAULT 'standard',
-        platforms TEXT,
-        targetAccountIds TEXT,
-        status TEXT DEFAULT 'draft',
-        scheduledAt TEXT,
-        results TEXT,
-        createdAt TEXT,
-        updatedAt TEXT,
-        publishedAt TEXT
-      );
-    `);
-
-    // Logs table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        level TEXT,
-        message TEXT,
-        details TEXT,
-        createdAt TEXT
-      );
-    `);
-  }
-
-  migrateFromJsonIfPresent() {
-    if (!fs.existsSync(JSON_DB_FILE)) return;
-
+  loadData() {
     try {
-      console.log('[SQLite Migration] Converting db.json to SQLite database app.db...');
-      const raw = fs.readFileSync(JSON_DB_FILE, 'utf-8');
-      const json = JSON.parse(raw);
-
-      const transaction = this.db.transaction(() => {
-        // Migrate settings
-        if (json.settings) {
-          const stmt = this.db.prepare(`
-            INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES (?, ?, ?)
-          `);
-          const now = new Date().toISOString();
-          for (const [key, val] of Object.entries(json.settings)) {
-            let storeVal = String(val || '');
-            if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(key)) {
-              storeVal = encryptText(storeVal);
-            }
-            stmt.run(key, storeVal, now);
-          }
-        }
-
-        // Migrate accounts
-        if (Array.isArray(json.accounts)) {
-          const stmt = this.db.prepare(`
-            INSERT OR REPLACE INTO accounts (
-              id, platform, name, accessToken, avatar, accountGroup, tokenStatus, tokenError, lastCheckedAt, createdAt, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `);
-          for (const acc of json.accounts) {
-            stmt.run(
-              acc.id,
-              acc.platform || 'facebook',
-              acc.name || '',
-              encryptText(acc.accessToken || ''),
-              acc.avatar || '',
-              acc.group || acc.accountGroup || 'Mặc định',
-              acc.tokenStatus || 'active',
-              acc.tokenError || null,
-              acc.lastCheckedAt || new Date().toISOString(),
-              acc.createdAt || new Date().toISOString(),
-              acc.updatedAt || new Date().toISOString()
-            );
-          }
-        }
-
-        // Migrate posts
-        if (Array.isArray(json.posts)) {
-          const stmt = this.db.prepare(`
-            INSERT OR REPLACE INTO posts (
-              id, title, caption, hashtags, firstComment, autoReplyMessage, mediaUrl, mediaUrls,
-              mediaType, postFormat, platforms, targetAccountIds, status, scheduledAt, results,
-              createdAt, updatedAt, publishedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `);
-          for (const p of json.posts) {
-            stmt.run(
-              p.id,
-              p.title || '',
-              p.caption || '',
-              p.hashtags || '',
-              p.firstComment || '',
-              p.autoReplyMessage || '',
-              p.mediaUrl || '',
-              JSON.stringify(p.mediaUrls || (p.mediaUrl ? [p.mediaUrl] : [])),
-              p.mediaType || 'image',
-              p.postFormat || 'standard',
-              JSON.stringify(p.platforms || ['facebook']),
-              JSON.stringify(p.targetAccountIds || []),
-              p.status || 'draft',
-              p.scheduledAt || null,
-              JSON.stringify(p.results || {}),
-              p.createdAt || new Date().toISOString(),
-              p.updatedAt || new Date().toISOString(),
-              p.publishedAt || null
-            );
-          }
-        }
-      });
-
-      transaction();
-      fs.renameSync(JSON_DB_FILE, `${JSON_DB_FILE}.bak`);
-      console.log('[SQLite Migration] Migration completed successfully. Backup created: db.json.bak');
+      if (fs.existsSync(DB_FILE)) {
+        const raw = fs.readFileSync(DB_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        this.data = {
+          settings: parsed.settings || {},
+          accounts: Array.isArray(parsed.accounts) ? parsed.accounts : [],
+          posts: Array.isArray(parsed.posts) ? parsed.posts : [],
+          logs: Array.isArray(parsed.logs) ? parsed.logs : []
+        };
+      } else {
+        this.saveData();
+      }
     } catch (err) {
-      console.error('[SQLite Migration Error]:', err);
+      console.error('[Database Load Error]:', err.message);
+      this.saveData();
+    }
+  }
+
+  saveData() {
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(this.data, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('[Database Save Error]:', err.message);
     }
   }
 
   // ================= SETTINGS ================= //
 
   getSettings() {
-    const rows = this.db.prepare(`SELECT key, value FROM settings`).all();
+    const rawSettings = this.data.settings || {};
     const settings = {};
-    for (const r of rows) {
-      if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(r.key)) {
-        settings[r.key] = decryptText(r.value);
+    for (const [key, value] of Object.entries(rawSettings)) {
+      if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(key)) {
+        settings[key] = decryptText(value);
       } else {
-        settings[r.key] = r.value;
+        settings[key] = value;
       }
     }
-    // Remove hardcoded '123456' default PIN!
-    settings.isPinConfigured = Boolean(settings.securityPin && settings.securityPin.trim().length >= 4);
+    settings.isPinConfigured = Boolean(settings.securityPin && String(settings.securityPin).trim().length >= 4);
     return settings;
   }
 
   saveSettings(newSettings = {}) {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, updatedAt) VALUES (?, ?, ?)
-    `);
-    const now = new Date().toISOString();
-    const current = this.getSettings();
-    const updated = { ...current, ...newSettings };
+    const currentRaw = this.data.settings || {};
+    const updated = { ...currentRaw };
 
-    const transaction = this.db.transaction(() => {
-      for (const [k, v] of Object.entries(updated)) {
-        if (k === 'isPinConfigured') continue;
-        let storeVal = String(v ?? '');
-        if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(k)) {
-          storeVal = encryptText(storeVal);
-        }
-        stmt.run(k, storeVal, now);
+    for (const [k, v] of Object.entries(newSettings)) {
+      if (k === 'isPinConfigured') continue;
+      let storeVal = String(v ?? '');
+      if (['appSecret', 'openaiApiKey', 'grokApiKey'].includes(k)) {
+        storeVal = encryptText(storeVal);
       }
-    });
+      updated[k] = storeVal;
+    }
 
-    transaction();
+    this.data.settings = updated;
+    this.saveData();
     return this.getSettings();
   }
 
@@ -238,84 +106,91 @@ class SQLiteDB {
   // ================= ACCOUNTS ================= //
 
   getAccounts() {
-    const rows = this.db.prepare(`SELECT * FROM accounts`).all();
-    return rows.map(acc => ({
+    return (this.data.accounts || []).map(acc => ({
       id: acc.id,
-      platform: acc.platform,
-      name: acc.name,
-      accessToken: decryptText(acc.accessToken),
-      avatar: acc.avatar,
-      group: acc.accountGroup || 'Mặc định',
-      tokenStatus: acc.tokenStatus,
-      tokenError: acc.tokenError,
-      lastCheckedAt: acc.lastCheckedAt,
-      createdAt: acc.createdAt,
-      updatedAt: acc.updatedAt
+      platform: acc.platform || 'facebook',
+      name: acc.name || '',
+      accessToken: decryptText(acc.accessToken || ''),
+      avatar: acc.avatar || '',
+      group: acc.group || acc.accountGroup || 'Mặc định',
+      tokenStatus: acc.tokenStatus || 'active',
+      tokenError: acc.tokenError || null,
+      lastCheckedAt: acc.lastCheckedAt || new Date().toISOString(),
+      createdAt: acc.createdAt || new Date().toISOString(),
+      updatedAt: acc.updatedAt || new Date().toISOString()
     }));
   }
 
   saveAccount(account) {
-    const stmt = this.db.prepare(`
-      INSERT INTO accounts (
-        id, platform, name, accessToken, avatar, accountGroup, tokenStatus, tokenError, lastCheckedAt, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id, platform) DO UPDATE SET
-        name = excluded.name,
-        accessToken = excluded.accessToken,
-        avatar = excluded.avatar,
-        accountGroup = COALESCE(accounts.accountGroup, excluded.accountGroup),
-        tokenStatus = excluded.tokenStatus,
-        tokenError = excluded.tokenError,
-        lastCheckedAt = excluded.lastCheckedAt,
-        updatedAt = excluded.updatedAt
-    `);
-
     const now = new Date().toISOString();
-    stmt.run(
-      account.id,
-      account.platform || 'facebook',
-      account.name || '',
-      encryptText(account.accessToken || ''),
-      account.avatar || '',
-      account.group || 'Mặc định',
-      account.tokenStatus || 'active',
-      account.tokenError || null,
-      account.lastCheckedAt || now,
-      now,
-      now
+    const existingIndex = this.data.accounts.findIndex(
+      a => a.id === account.id && (a.platform || 'facebook') === (account.platform || 'facebook')
     );
 
+    const accountToStore = {
+      id: account.id,
+      platform: account.platform || 'facebook',
+      name: account.name || '',
+      accessToken: encryptText(account.accessToken || ''),
+      avatar: account.avatar || '',
+      accountGroup: account.group || account.accountGroup || 'Mặc định',
+      group: account.group || account.accountGroup || 'Mặc định',
+      tokenStatus: account.tokenStatus || 'active',
+      tokenError: account.tokenError || null,
+      lastCheckedAt: account.lastCheckedAt || now,
+      createdAt: existingIndex >= 0 ? (this.data.accounts[existingIndex].createdAt || now) : now,
+      updatedAt: now
+    };
+
+    if (existingIndex >= 0) {
+      this.data.accounts[existingIndex] = {
+        ...this.data.accounts[existingIndex],
+        ...accountToStore
+      };
+    } else {
+      this.data.accounts.push(accountToStore);
+    }
+
+    this.saveData();
     return this.getAccounts();
   }
 
   updateAccountGroup(id, platform, group) {
-    const stmt = this.db.prepare(`
-      UPDATE accounts SET accountGroup = ?, updatedAt = ? WHERE id = ? AND platform = ?
-    `);
-    stmt.run(group || 'Mặc định', new Date().toISOString(), id, platform);
+    const acc = this.data.accounts.find(a => a.id === id && (a.platform || 'facebook') === platform);
+    if (acc) {
+      acc.group = group || 'Mặc định';
+      acc.accountGroup = group || 'Mặc định';
+      acc.updatedAt = new Date().toISOString();
+      this.saveData();
+    }
     return this.getAccounts().find(a => a.id === id && a.platform === platform);
   }
 
   updateAccountStatus(id, platform, tokenStatus, tokenError = null) {
-    const stmt = this.db.prepare(`
-      UPDATE accounts SET tokenStatus = ?, tokenError = ?, lastCheckedAt = ?, updatedAt = ? WHERE id = ? AND platform = ?
-    `);
     const now = new Date().toISOString();
-    stmt.run(tokenStatus, tokenError, now, now, id, platform);
+    const acc = this.data.accounts.find(a => a.id === id && (a.platform || 'facebook') === platform);
+    if (acc) {
+      acc.tokenStatus = tokenStatus;
+      acc.tokenError = tokenError;
+      acc.lastCheckedAt = now;
+      acc.updatedAt = now;
+      this.saveData();
+    }
     return this.getAccounts().find(a => a.id === id && a.platform === platform);
   }
 
   deleteAccount(id, platform) {
-    const stmt = this.db.prepare(`DELETE FROM accounts WHERE id = ? AND platform = ?`);
-    stmt.run(id, platform);
+    this.data.accounts = this.data.accounts.filter(
+      a => !(a.id === id && (a.platform || 'facebook') === platform)
+    );
+    this.saveData();
     return this.getAccounts();
   }
 
   // ================= POSTS ================= //
 
   getPosts() {
-    const rows = this.db.prepare(`SELECT * FROM posts ORDER BY createdAt DESC`).all();
-    return rows.map(p => ({
+    const posts = (this.data.posts || []).map(p => ({
       id: p.id,
       title: p.title || '',
       caption: p.caption || '',
@@ -323,18 +198,20 @@ class SQLiteDB {
       firstComment: p.firstComment || '',
       autoReplyMessage: p.autoReplyMessage || '',
       mediaUrl: p.mediaUrl || '',
-      mediaUrls: p.mediaUrls ? JSON.parse(p.mediaUrls) : (p.mediaUrl ? [p.mediaUrl] : []),
+      mediaUrls: Array.isArray(p.mediaUrls) ? p.mediaUrls : (p.mediaUrl ? [p.mediaUrl] : []),
       mediaType: p.mediaType || 'image',
       postFormat: p.postFormat || 'standard',
-      platforms: p.platforms ? JSON.parse(p.platforms) : ['facebook'],
-      targetAccountIds: p.targetAccountIds ? JSON.parse(p.targetAccountIds) : [],
+      platforms: Array.isArray(p.platforms) ? p.platforms : ['facebook'],
+      targetAccountIds: Array.isArray(p.targetAccountIds) ? p.targetAccountIds : [],
       status: p.status || 'draft',
       scheduledAt: p.scheduledAt || null,
-      results: p.results ? JSON.parse(p.results) : {},
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
+      results: p.results || {},
+      createdAt: p.createdAt || new Date().toISOString(),
+      updatedAt: p.updatedAt || new Date().toISOString(),
       publishedAt: p.publishedAt || null
     }));
+
+    return posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   createPost(post) {
@@ -343,95 +220,78 @@ class SQLiteDB {
     const mediaUrl = mediaUrls[0] || post.mediaUrl || '';
     const now = new Date().toISOString();
 
-    const stmt = this.db.prepare(`
-      INSERT INTO posts (
-        id, title, caption, hashtags, firstComment, autoReplyMessage, mediaUrl, mediaUrls,
-        mediaType, postFormat, platforms, targetAccountIds, status, scheduledAt, results,
-        createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      newId,
-      post.title || '',
-      post.caption || '',
-      post.hashtags || '',
-      post.firstComment || '',
-      post.autoReplyMessage || '',
+    const newPost = {
+      id: newId,
+      title: post.title || '',
+      caption: post.caption || '',
+      hashtags: post.hashtags || '',
+      firstComment: post.firstComment || '',
+      autoReplyMessage: post.autoReplyMessage || '',
       mediaUrl,
-      JSON.stringify(mediaUrls),
-      post.mediaType || 'image',
-      post.postFormat || 'standard',
-      JSON.stringify(post.platforms || ['facebook']),
-      JSON.stringify(post.targetAccountIds || []),
-      post.scheduledAt ? 'scheduled' : 'draft',
-      post.scheduledAt || null,
-      JSON.stringify({}),
-      now,
-      now
-    );
+      mediaUrls,
+      mediaType: post.mediaType || 'image',
+      postFormat: post.postFormat || 'standard',
+      platforms: post.platforms || ['facebook'],
+      targetAccountIds: post.targetAccountIds || [],
+      status: post.scheduledAt ? 'scheduled' : 'draft',
+      scheduledAt: post.scheduledAt || null,
+      results: {},
+      createdAt: now,
+      updatedAt: now,
+      publishedAt: null
+    };
 
+    this.data.posts.unshift(newPost);
+    this.saveData();
     return this.getPosts().find(p => p.id === newId);
   }
 
   updatePost(id, updates) {
-    const existing = this.getPosts().find(p => p.id === id);
-    if (!existing) return null;
+    const index = this.data.posts.findIndex(p => p.id === id);
+    if (index === -1) return null;
 
-    const merged = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+    const existing = this.data.posts[index];
+    const merged = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    };
+
     if (updates.mediaUrls && Array.isArray(updates.mediaUrls)) {
       merged.mediaUrl = updates.mediaUrls[0] || '';
     }
 
-    const stmt = this.db.prepare(`
-      UPDATE posts SET
-        title = ?, caption = ?, hashtags = ?, firstComment = ?, autoReplyMessage = ?,
-        mediaUrl = ?, mediaUrls = ?, mediaType = ?, postFormat = ?, platforms = ?,
-        targetAccountIds = ?, status = ?, scheduledAt = ?, results = ?, updatedAt = ?, publishedAt = ?
-      WHERE id = ?
-    `);
-
-    stmt.run(
-      merged.title || '',
-      merged.caption || '',
-      merged.hashtags || '',
-      merged.firstComment || '',
-      merged.autoReplyMessage || '',
-      merged.mediaUrl || '',
-      JSON.stringify(merged.mediaUrls || []),
-      merged.mediaType || 'image',
-      merged.postFormat || 'standard',
-      JSON.stringify(merged.platforms || ['facebook']),
-      JSON.stringify(merged.targetAccountIds || []),
-      merged.status || 'draft',
-      merged.scheduledAt || null,
-      JSON.stringify(merged.results || {}),
-      merged.updatedAt,
-      merged.publishedAt || null,
-      id
-    );
-
+    this.data.posts[index] = merged;
+    this.saveData();
     return merged;
   }
 
   deletePost(id) {
-    const stmt = this.db.prepare(`DELETE FROM posts WHERE id = ?`);
-    stmt.run(id);
+    this.data.posts = this.data.posts.filter(p => p.id !== id);
+    this.saveData();
     return this.getPosts();
   }
 
   // ================= LOGS ================= //
 
   log(level, message, details = '') {
-    const stmt = this.db.prepare(`
-      INSERT INTO logs (level, message, details, createdAt) VALUES (?, ?, ?, ?)
-    `);
-    stmt.run(level, message, typeof details === 'object' ? JSON.stringify(details) : String(details), new Date().toISOString());
+    const logEntry = {
+      id: Date.now(),
+      level,
+      message,
+      details: typeof details === 'object' ? JSON.stringify(details) : String(details),
+      createdAt: new Date().toISOString()
+    };
+    this.data.logs.unshift(logEntry);
+    if (this.data.logs.length > 500) {
+      this.data.logs = this.data.logs.slice(0, 500);
+    }
+    this.saveData();
   }
 
   getLogs(limit = 100) {
-    return this.db.prepare(`SELECT * FROM logs ORDER BY id DESC LIMIT ?`).all(limit);
+    return (this.data.logs || []).slice(0, limit);
   }
 }
 
-export const db = new SQLiteDB();
+export const db = new JsonDB();

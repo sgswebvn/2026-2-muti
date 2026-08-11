@@ -39,18 +39,27 @@ export async function exchangeForLongLivedToken(shortToken, appId, appSecret) {
 }
 
 /**
- * Fetch all Facebook Pages owned or managed by the provided Access Token
+ * Fetch all Facebook Pages owned or managed by the provided Access Token (With Full Pagination)
  */
 export async function getFacebookPages(userAccessToken) {
   try {
-    const res = await axios.get(`${GRAPH_URL}/me/accounts`, {
-      params: {
-        fields: 'id,name,access_token,category,picture.type(large)',
-        access_token: userAccessToken
-      }
-    });
+    let allPages = [];
+    let nextUrl = `${GRAPH_URL}/me/accounts?fields=id,name,access_token,category,picture.type(large)&limit=250&access_token=${encodeURIComponent(userAccessToken)}`;
 
-    if (!res.data.data || res.data.data.length === 0) {
+    while (nextUrl) {
+      const res = await axios.get(nextUrl);
+      const data = res.data?.data || [];
+      allPages.push(...data);
+
+      // Follow pagination link if present
+      if (res.data?.paging?.next) {
+        nextUrl = res.data.paging.next;
+      } else {
+        nextUrl = null;
+      }
+    }
+
+    if (allPages.length === 0) {
       // If /me/accounts returns empty, check if token itself belongs directly to a single Page
       try {
         const pageRes = await axios.get(`${GRAPH_URL}/me`, {
@@ -75,17 +84,26 @@ export async function getFacebookPages(userAccessToken) {
       throw new Error('Không tìm thấy Fanpage nào thuộc quyền quản lý của Access Token này. Vui lòng cấp quyền pages_show_list và pages_manage_posts.');
     }
     
-    return res.data.data.map(page => ({
-      id: page.id,
-      name: page.name,
-      category: page.category || 'Facebook Page',
-      accessToken: page.access_token,
-      avatar: page.picture?.data?.url || '',
-      platform: 'facebook'
-    }));
+    // Deduplicate by page ID in case Graph API returns duplicates
+    const pageMap = new Map();
+    for (const page of allPages) {
+      if (!pageMap.has(page.id)) {
+        pageMap.set(page.id, {
+          id: page.id,
+          name: page.name,
+          category: page.category || 'Facebook Page',
+          accessToken: page.access_token,
+          avatar: page.picture?.data?.url || '',
+          platform: 'facebook'
+        });
+      }
+    }
+
+    return Array.from(pageMap.values());
   } catch (error) {
     const errorDetails = error.response?.data?.error?.message || error.message;
     console.error('Fetch Facebook Pages Error:', error.response?.data || error.message);
     throw new Error(`Lỗi kết nối Facebook: ${errorDetails}`);
   }
 }
+

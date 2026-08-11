@@ -127,13 +127,68 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     setPostMode('schedule');
   };
 
+  const [accountVariations, setAccountVariations] = useState({});
+  const [generatingVariations, setGeneratingVariations] = useState(false);
+  const [activeVariationPageId, setActiveVariationPageId] = useState(null);
+
+  // Generate Multi-Page AI Variations
+  const handleGenerateVariations = async () => {
+    if (selectedPageIds.length === 0) {
+      setNotice({ type: 'error', text: 'Vui lòng chọn ít nhất 1 Fanpage để sinh biến thể AI.' });
+      return;
+    }
+
+    const targetPages = fbAccounts.filter(a => selectedPageIds.includes(a.id));
+    setGeneratingVariations(true);
+    setNotice({ type: 'info', text: `🤖 Đang gọi AI phân tích video & tạo ${targetPages.length} biến thể nội dung độc bản...` });
+
+    try {
+      const res = await fetch('/api/ai/generate-variations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          videoUrl: mediaUrls[0] || '',
+          videoPrompt: caption || title || 'Phân tích video thu hút',
+          pageAccounts: targetPages,
+          model: 'gemini'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.variations) {
+        setAccountVariations(data.variations);
+        setActiveVariationPageId(targetPages[0]?.id || null);
+        setNotice({
+          type: 'success',
+          text: `🎉 Đã tạo thành công ${Object.keys(data.variations).length} biến thể nội dung độc bản cho ${targetPages.length} Fanpage! (${data.source})`
+        });
+      } else {
+        throw new Error(data.error || 'Không thể sinh biến thể AI.');
+      }
+    } catch (err) {
+      setNotice({ type: 'error', text: err.message });
+    } finally {
+      setGeneratingVariations(false);
+    }
+  };
+
+  const updateIndividualVariation = (pageId, field, value) => {
+    setAccountVariations(prev => ({
+      ...prev,
+      [pageId]: {
+        ...(prev[pageId] || {}),
+        [field]: value
+      }
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (selectedPageIds.length === 0) {
       setNotice({ type: 'error', text: 'Vui lòng chọn ít nhất 1 Fanpage Facebook để đăng bài.' });
       return;
     }
-    if (!caption.trim()) {
+    if (!caption.trim() && Object.keys(accountVariations).length === 0) {
       setNotice({ type: 'error', text: 'Nội dung bài viết không được để trống.' });
       return;
     }
@@ -168,6 +223,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           mediaType,
           postFormat: mediaType === 'video' ? 'reel' : 'standard',
           targetAccountIds: selectedPageIds,
+          accountVariations: accountVariations,
           publishNow: postMode === 'now',
           scheduledAt: postMode === 'schedule' ? new Date(scheduledAt).toISOString() : null
         })
@@ -178,7 +234,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         setNotice({ 
           type: 'success', 
           text: postMode === 'now' 
-            ? 'Đã gửi lệnh đăng bài tới các Fanpage! Bài viết đang được xử lý.' 
+            ? `Đã gửi lệnh đăng bài tới ${selectedPageIds.length} Fanpage! (${Object.keys(accountVariations).length > 0 ? 'Đã áp dụng biến thể AI độc bản cho từng trang' : 'Nội dung chung'})` 
             : `Đã lên lịch đăng bài thành công vào lúc ${new Date(scheduledAt).toLocaleString('vi-VN')}!` 
         });
 
@@ -196,6 +252,18 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     }
   };
 
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [modalGroupFilter, setModalGroupFilter] = useState('ALL');
+
+  const filteredModalAccounts = fbAccounts.filter(acc => {
+    const matchesSearch = !modalSearchQuery.trim() || 
+      acc.name.toLowerCase().includes(modalSearchQuery.toLowerCase()) || 
+      acc.id.includes(modalSearchQuery);
+    const matchesGroup = modalGroupFilter === 'ALL' || (acc.group || 'Mặc định') === modalGroupFilter;
+    return matchesSearch && matchesGroup;
+  });
+
   return (
     <div className="grid-2" style={{ alignItems: 'start' }}>
       {/* LEFT: Composer Form */}
@@ -211,107 +279,78 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         )}
 
         <form onSubmit={handleSubmit}>
-          {/* SECTION 1: FANPAGE SELECTION */}
+          {/* SECTION 1: VISUAL FANPAGE & GROUP SELECTION CARD */}
           <div 
             style={{ 
-              background: '#0f172a', 
-              padding: '16px', 
-              borderRadius: '10px', 
-              border: '1px solid #334155',
+              background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', 
+              padding: '18px', 
+              borderRadius: '12px', 
+              border: '1px solid #3b82f6',
               marginBottom: '20px' 
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
               <div>
-                <span className="form-label" style={{ fontSize: '0.95rem', fontWeight: 700 }}>
-                  Chọn Fanpage Đăng Bài
-                </span>
-                <span style={{ fontSize: '0.8rem', color: '#60a5fa', marginLeft: '8px', fontWeight: 600 }}>
-                  (Đã chọn {selectedPageIds.length}/{fbAccounts.length})
-                </span>
+                <div className="form-label" style={{ fontSize: '1rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>📂 Bảng Chọn Fanpage & Nhóm</span>
+                </div>
+                <div style={{ fontSize: '0.85rem', color: '#e2e8f0', marginTop: '2px' }}>
+                  Đã chọn <strong style={{ color: '#4ade80', fontSize: '1.1rem' }}>{selectedPageIds.length}</strong> / <strong>{fbAccounts.length}</strong> Fanpage kết nối
+                </div>
               </div>
 
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                onClick={selectAllPages}
-              >
-                {selectedPageIds.length === fbAccounts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                  onClick={selectAllPages}
+                >
+                  {selectedPageIds.length === fbAccounts.length ? 'Bỏ chọn tất cả' : 'Chọn tất cả'}
+                </button>
+
+                <button 
+                  type="button" 
+                  className="btn btn-primary" 
+                  style={{ 
+                    fontSize: '0.875rem', 
+                    padding: '8px 16px', 
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.4)'
+                  }}
+                  onClick={() => setIsGroupModalOpen(true)}
+                >
+                  🔍 MỞ BẢNG CHỌN NHÓM & FANPAGE (BẢNG RỘNG)
+                </button>
+              </div>
             </div>
 
+            {/* Selected Groups Chips Preview */}
             {groupsList.length > 0 && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', alignSelf: 'center' }}>Lọc nhanh theo nhóm:</span>
                 <button
                   type="button"
                   className={`btn ${activeGroupTab === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ padding: '4px 12px', fontSize: '0.785rem' }}
+                  style={{ padding: '3px 10px', fontSize: '0.75rem' }}
                   onClick={() => selectPagesByGroup('ALL')}
                 >
-                  Tất cả nhóm
+                  Tất cả ({fbAccounts.length})
                 </button>
-                {groupsList.map(grp => (
-                  <button
-                    key={grp}
-                    type="button"
-                    className={`btn ${activeGroupTab === grp ? 'btn-primary' : 'btn-secondary'}`}
-                    style={{ padding: '4px 12px', fontSize: '0.785rem' }}
-                    onClick={() => selectPagesByGroup(grp)}
-                  >
-                    Nhóm: {grp}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {fbAccounts.length === 0 ? (
-              <div style={{ fontSize: '0.85rem', color: '#f87171', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '6px' }}>
-                Chưa có Fanpage nào kết nối. Hãy sang tab Quản Lý Tài Khoản để dán Access Token kết nối.
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '8px', maxHeight: '160px', overflowY: 'auto' }}>
-                {fbAccounts.map(acc => {
-                  const isSelected = selectedPageIds.includes(acc.id);
+                {groupsList.map(grp => {
+                  const countInGrp = fbAccounts.filter(a => (a.group || 'Mặc định') === grp).length;
+                  const selectedInGrp = fbAccounts.filter(a => (a.group || 'Mặc định') === grp && selectedPageIds.includes(a.id)).length;
                   return (
-                    <div
-                      key={acc.id}
-                      onClick={() => togglePageSelection(acc.id)}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: '8px',
-                        background: isSelected ? 'rgba(37, 99, 235, 0.2)' : '#1e293b',
-                        border: isSelected ? '2px solid #2563eb' : '1px solid #334155',
-                        color: isSelected ? '#ffffff' : 'var(--text-muted)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        transition: 'all 0.15s ease'
-                      }}
+                    <button
+                      key={grp}
+                      type="button"
+                      className={`btn ${activeGroupTab === grp ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '3px 10px', fontSize: '0.75rem' }}
+                      onClick={() => selectPagesByGroup(grp)}
                     >
-                      <input 
-                        type="checkbox" 
-                        checked={isSelected}
-                        onChange={() => {}}
-                        style={{ cursor: 'pointer' }}
-                      />
-                      {acc.avatar ? (
-                        <img src={acc.avatar} alt="" style={{ width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700 }}>
-                          f
-                        </div>
-                      )}
-                      <div style={{ overflow: 'hidden' }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.825rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {acc.name}
-                        </div>
-                        <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>
-                          {acc.group || 'Mặc định'}
-                        </div>
-                      </div>
-                    </div>
+                      {grp} ({selectedInGrp}/{countInGrp})
+                    </button>
                   );
                 })}
               </div>
@@ -373,6 +412,104 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
               value={autoReplyMessage}
               onChange={(e) => setAutoReplyMessage(e.target.value)}
             />
+          </div>
+
+          {/* AI MULTI-VARIATION GENERATOR BUTTON & ACCORDION EDITOR */}
+          <div style={{ background: '#0b1329', padding: '16px', borderRadius: '10px', border: '1px solid #3b82f6', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.95rem', color: '#60a5fa', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={18} /> Đa Nội Dung AI Cho {selectedPageIds.length} Fanpage
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Tự động sinh {selectedPageIds.length} bản nội dung với 15 góc nhìn phân tích khác nhau cho cùng 1 video/media.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ padding: '8px 14px', fontSize: '0.85rem', fontWeight: 700, background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)' }}
+                onClick={handleGenerateVariations}
+                disabled={generatingVariations}
+              >
+                {generatingVariations ? '⏳ AI Đang Sinh Nội Dung...' : `🤖 Sinh ${selectedPageIds.length} Biến Thể AI`}
+              </button>
+            </div>
+
+            {Object.keys(accountVariations).length > 0 && (
+              <div style={{ background: '#0f172a', padding: '14px', borderRadius: '8px', border: '1px solid #334155' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#38bdf8', marginBottom: '8px' }}>
+                  Danh sách nội dung biến thể theo Fanpage (Bấm để xem & chỉnh sửa):
+                </div>
+
+                {/* Page Selection Tabs */}
+                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', marginBottom: '12px' }}>
+                  {fbAccounts.filter(a => selectedPageIds.includes(a.id)).map(acc => {
+                    const isActive = activeVariationPageId === acc.id;
+                    const hasVar = Boolean(accountVariations[acc.id]);
+                    return (
+                      <button
+                        key={acc.id}
+                        type="button"
+                        onClick={() => setActiveVariationPageId(acc.id)}
+                        className={`btn ${isActive ? 'btn-primary' : 'btn-secondary'}`}
+                        style={{
+                          fontSize: '0.75rem',
+                          padding: '4px 10px',
+                          whiteSpace: 'nowrap',
+                          border: hasVar ? '1px solid #3b82f6' : '1px dashed #475569'
+                        }}
+                      >
+                        {acc.name} {hasVar ? '✨' : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Active Page Variation Form */}
+                {activeVariationPageId && accountVariations[activeVariationPageId] && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#a7f3d0', fontWeight: 600 }}>
+                      Nội dung riêng cho: {fbAccounts.find(a => a.id === activeVariationPageId)?.name}
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tiêu đề biến thể:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        style={{ fontSize: '0.85rem' }}
+                        value={accountVariations[activeVariationPageId].title || ''}
+                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'title', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Caption phân tích riêng:</label>
+                      <textarea
+                        className="input-field"
+                        rows={4}
+                        style={{ fontSize: '0.85rem' }}
+                        value={accountVariations[activeVariationPageId].caption || ''}
+                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'caption', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>First Comment Seeding riêng:</label>
+                      <input
+                        type="text"
+                        className="input-field"
+                        style={{ fontSize: '0.85rem' }}
+                        value={accountVariations[activeVariationPageId].firstComment || ''}
+                        onChange={(e) => updateIndividualVariation(activeVariationPageId, 'firstComment', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* SECTION 3: MEDIA UPLOAD */}
@@ -602,6 +739,259 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           )}
         </div>
       </div>
+
+      {/* FULL-SCREEN EXPANDED GROUP & FANPAGE SELECTION MODAL */}
+      {isGroupModalOpen && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            background: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div 
+            style={{
+              width: '94vw',
+              maxWidth: '1280px',
+              height: '88vh',
+              background: '#0b1329',
+              border: '1px solid #3b82f6',
+              borderRadius: '16px',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.8)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div 
+              style={{ 
+                padding: '20px 24px', 
+                borderBottom: '1px solid #1e293b', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '14px',
+                background: '#0f172a'
+              }}
+            >
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📂 BẢNG CHỌN FANPAGE & NHÓM MỞ RỘNG
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Chọn hoặc bỏ chọn danh sách trang hiển thị trực quan theo nhóm không cần cuộn chật hẹp.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-primary"
+                  style={{ padding: '8px 18px', fontSize: '0.9rem', fontWeight: 700 }}
+                  onClick={() => setIsGroupModalOpen(false)}
+                >
+                  ✅ XÁC NHẬN VÀ ÁP DỤNG ({selectedPageIds.length} TRANG)
+                </button>
+
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  style={{ padding: '8px 14px', fontSize: '0.9rem' }}
+                  onClick={() => setIsGroupModalOpen(false)}
+                >
+                  ✕ Đóng
+                </button>
+              </div>
+            </div>
+
+            {/* Toolbar: Search & Group Filter Bar */}
+            <div 
+              style={{ 
+                padding: '14px 24px', 
+                background: '#1e293b', 
+                borderBottom: '1px solid #334155',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px'
+              }}
+            >
+              {/* Search Bar */}
+              <input 
+                type="text" 
+                className="input-field" 
+                placeholder="🔍 Tìm nhanh theo tên trang hoặc ID..." 
+                value={modalSearchQuery}
+                onChange={(e) => setModalSearchQuery(e.target.value)}
+                style={{ width: '280px', fontSize: '0.875rem' }}
+              />
+
+              {/* Group Tabs */}
+              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', flex: 1, paddingBottom: '4px' }}>
+                <button
+                  type="button"
+                  className={`btn ${modalGroupFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+                  style={{ fontSize: '0.8rem', padding: '6px 14px', whiteSpace: 'nowrap' }}
+                  onClick={() => setModalGroupFilter('ALL')}
+                >
+                  Tất cả nhóm ({fbAccounts.length})
+                </button>
+
+                {groupsList.map(grp => {
+                  const totalInGrp = fbAccounts.filter(a => (a.group || 'Mặc định') === grp).length;
+                  const selectedInGrp = fbAccounts.filter(a => (a.group || 'Mặc định') === grp && selectedPageIds.includes(a.id)).length;
+                  return (
+                    <button
+                      key={grp}
+                      type="button"
+                      className={`btn ${modalGroupFilter === grp ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ fontSize: '0.8rem', padding: '6px 14px', whiteSpace: 'nowrap' }}
+                      onClick={() => setModalGroupFilter(grp)}
+                    >
+                      Nhóm: {grp} ({selectedInGrp}/{totalInGrp})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Quick Select Actions for Filtered View */}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                  onClick={() => {
+                    const idsInFilter = filteredModalAccounts.map(a => a.id);
+                    setSelectedPageIds(Array.from(new Set([...selectedPageIds, ...idsInFilter])));
+                  }}
+                >
+                  Tích chọn {filteredModalAccounts.length} trang đang lọc
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '6px 10px' }}
+                  onClick={() => {
+                    const idsInFilter = filteredModalAccounts.map(a => a.id);
+                    setSelectedPageIds(selectedPageIds.filter(id => !idsInFilter.includes(id)));
+                  }}
+                >
+                  Bỏ chọn {filteredModalAccounts.length} trang đang lọc
+                </button>
+              </div>
+            </div>
+
+            {/* Large Visual Grid */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px', background: '#0b1329' }}>
+              {filteredModalAccounts.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Không tìm thấy Fanpage nào phù hợp với bộ lọc tìm kiếm.
+                </div>
+              ) : (
+                <div 
+                  style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', 
+                    gap: '14px' 
+                  }}
+                >
+                  {filteredModalAccounts.map(acc => {
+                    const isSelected = selectedPageIds.includes(acc.id);
+                    const isCheckpoint = acc.tokenStatus === 'checkpoint';
+                    return (
+                      <div
+                        key={acc.id}
+                        onClick={() => togglePageSelection(acc.id)}
+                        style={{
+                          padding: '14px 16px',
+                          borderRadius: '10px',
+                          background: isSelected ? 'rgba(37, 99, 235, 0.25)' : '#0f172a',
+                          border: isSelected ? '2px solid #3b82f6' : '1px solid #1e293b',
+                          boxShadow: isSelected ? '0 0 15px rgba(59, 130, 246, 0.3)' : 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                          transition: 'all 0.15s ease',
+                          position: 'relative'
+                        }}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected}
+                          onChange={() => {}}
+                          style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                        />
+
+                        {acc.avatar ? (
+                          <img src={acc.avatar} alt="" style={{ width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                            f
+                          </div>
+                        )}
+
+                        <div style={{ overflow: 'hidden', flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: '0.9rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: isSelected ? '#ffffff' : '#e2e8f0' }}>
+                            {acc.name}
+                          </div>
+                          
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.7rem', padding: '2px 6px', borderRadius: '4px', background: '#334155', color: '#94a3b8' }}>
+                              {acc.group || 'Mặc định'}
+                            </span>
+
+                            {isCheckpoint ? (
+                              <span style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 700 }}>🚨 Checkpoint</span>
+                            ) : (
+                              <span style={{ fontSize: '0.7rem', color: '#4ade80', fontWeight: 600 }}>Hoạt động</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Bar */}
+            <div 
+              style={{ 
+                padding: '16px 24px', 
+                background: '#0f172a', 
+                borderTop: '1px solid #1e293b', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between' 
+              }}
+            >
+              <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+                Đã chọn <strong style={{ color: '#4ade80', fontSize: '1.1rem' }}>{selectedPageIds.length}</strong> / <strong>{fbAccounts.length}</strong> Fanpage.
+              </div>
+
+              <button 
+                type="button" 
+                className="btn btn-primary"
+                style={{ padding: '10px 24px', fontSize: '0.95rem', fontWeight: 700 }}
+                onClick={() => setIsGroupModalOpen(false)}
+              >
+                ✅ XÁC NHẬN CHỌN ({selectedPageIds.length} FANPAGE)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
