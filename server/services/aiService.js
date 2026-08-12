@@ -401,7 +401,7 @@ Return ONLY raw JSON object:
 /**
  * Smart Fallback Engine when Gemini API is out of Quota or Offline
  */
-function generateLocalFallbackVariations(pageAccounts, videoTopic = '', videoPrompt = '') {
+export function generateLocalFallbackVariations(pageAccounts, videoTopic = '', videoPrompt = '') {
   const baseTitle = videoTopic || 'EXCLUSIVE VIDEO SHOWCASE';
   const variations = {};
   

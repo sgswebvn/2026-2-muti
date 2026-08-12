@@ -6,10 +6,22 @@ const accountSchema = new mongoose.Schema({
   id: { type: String, required: true }, // Facebook Page ID / Social Account ID
   platform: { type: String, enum: ['facebook', 'instagram', 'threads'], default: 'facebook' },
   name: { type: String, required: true, trim: true },
-  accessToken: { type: String, required: true }, // Encrypted AES-256
+  accessToken: {
+    type: String,
+    required: true,
+    set: function (v) {
+      if (!v) return '';
+      const str = String(v).trim();
+      // If already encrypted (hex string with colon format iv:ciphertext), keep as is
+      if (str.includes(':') && str.length > 32) {
+        return str;
+      }
+      return encryptText(str);
+    }
+  },
   avatar: { type: String, default: '' },
   group: { type: String, default: 'Mặc định' },
-  tokenStatus: { type: String, enum: ['active', 'expired', 'invalid', 'warning'], default: 'active' },
+  tokenStatus: { type: String, enum: ['active', 'expired', 'invalid', 'warning', 'checkpoint'], default: 'active' },
   tokenError: { type: String, default: null },
   lastCheckedAt: { type: Date, default: Date.now }
 }, { timestamps: true });

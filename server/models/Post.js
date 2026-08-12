@@ -4,23 +4,45 @@ const postSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   title: { type: String, default: '' },
   caption: { type: String, default: '' },
-  hashtags: { type: String, default: '' },
+  hashtags: {
+    type: String,
+    default: '',
+    set: v => Array.isArray(v) ? v.join(' ') : String(v || '')
+  },
   firstComment: { type: String, default: '' },
   autoReplyMessage: { type: String, default: '' },
   mediaUrl: { type: String, default: '' },
   mediaUrls: [{ type: String }],
   mediaType: { type: String, enum: ['image', 'video'], default: 'image' },
-  postFormat: { type: String, enum: ['standard', 'reels', 'reel', 'story'], default: 'standard' },
+  postFormat: {
+    type: String,
+    enum: ['standard', 'reels', 'reel', 'story'],
+    default: 'standard',
+    set: v => v === 'reel' ? 'reels' : v
+  },
   platforms: [{ type: String, default: 'facebook' }],
   targetAccountIds: [{ type: String }],
-  accountVariations: { type: mongoose.Schema.Types.Mixed, default: {} },
+  accountVariations: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {},
+    set: function(v) {
+      if (v && typeof v === 'object') {
+        for (const pageId in v) {
+          if (v[pageId] && Array.isArray(v[pageId].hashtags)) {
+            v[pageId].hashtags = v[pageId].hashtags.join(' ');
+          }
+        }
+      }
+      return v;
+    }
+  },
   status: { type: String, enum: ['draft', 'scheduled', 'publishing', 'published', 'failed'], default: 'draft' },
   scheduledAt: { type: Date, default: null },
   publishedAt: { type: Date, default: null },
   results: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { timestamps: true });
 
-// Pre-validate hook to format hashtags array into a single space-separated string and normalize postFormat
+// Pre-validate hook to ensure hashtags and postFormat are cleanly formatted
 postSchema.pre('validate', function() {
   if (Array.isArray(this.hashtags)) {
     this.hashtags = this.hashtags.join(' ');

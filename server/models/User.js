@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
-import { encryptText, decryptText } from '../utils/crypto.js';
+import { encryptText, decryptText } from '../utils/cryptoUtils.js';
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
