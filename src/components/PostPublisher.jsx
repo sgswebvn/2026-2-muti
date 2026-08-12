@@ -146,8 +146,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     const initialVariation = {
       title: title || 'EXCLUSIVE VIDEO HIGHLIGHT',
       caption: caption,
-      hashtags: hashtags || '#ViralVideo #Trending',
-      firstComment: firstComment || '👉 Check out this video and leave a reply below!'
+      hashtags: hashtags || '#ViralVideo #Trending'
     };
 
     const remainingPages = targetPages.slice(1);
@@ -179,7 +178,9 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
         body: JSON.stringify({
           videoUrl: mediaUrls[0] || '',
           videoTopic: title || '',
-          videoPrompt: caption || title || 'Phân tích video thu hút',
+          initialAnalysis: caption || '',
+          initialTitle: title || '',
+          videoPrompt: caption || title || 'Phân tích nội dung chi tiết video',
           originalName: mediaUrls[0]?.split('/')?.pop() || '',
           pageAccounts: remainingPages,
           model: 'gemini'
@@ -1141,14 +1142,8 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
                       />
                     </div>
 
-                    <div className="form-group">
-                      <label className="form-label" style={{ color: '#38bdf8' }}>First Comment Seeding (English)</label>
-                      <input
-                        type="text"
-                        className="input-field"
-                        value={currentVar.firstComment || ''}
-                        onChange={(e) => updateIndividualVariation(targetPageId, 'firstComment', e.target.value)}
-                      />
+                    <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: '10px 14px', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', fontSize: '0.8rem', color: '#38bdf8' }}>
+                      💬 <b>Bình luận đầu tiên (First Comment):</b> Tất cả các biến thể sẽ tự động dùng chung nội dung bình luận đầu tiên bạn nhập ở form chính bên ngoài.
                     </div>
                   </div>
                 );

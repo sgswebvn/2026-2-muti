@@ -9,7 +9,7 @@
     "preview": "node node_modules/vite/bin/vite.js preview",
     "server": "node server/index.js",
     "start": "npm run build && node server/index.js",
-    "postinstall": "chmod -R 777 node_modules/.bin || true"
+    "postinstall": "echo Postinstall step completed"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.1",

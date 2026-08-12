@@ -298,7 +298,7 @@ Return raw JSON ONLY:
  * Generate 15+ Unique Fanpage Variations with Automatic Quota Fallback
  */
 export async function generateMultiPageVariations(options = {}) {
-  const { videoUrl = '', originalName = '', videoPrompt = '', videoTopic = '', pageAccounts = [] } = options;
+  const { videoUrl = '', originalName = '', videoPrompt = '', videoTopic = '', initialAnalysis = '', pageAccounts = [] } = options;
   if (!Array.isArray(pageAccounts) || pageAccounts.length === 0) {
     return { success: false, error: 'Vui lòng chọn ít nhất 1 Fanpage để sinh biến thể nội dung.' };
   }
@@ -309,7 +309,7 @@ export async function generateMultiPageVariations(options = {}) {
 
   if (!geminiApiKey) {
     // If no API Key, return smart local fallback variations
-    const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt);
+    const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt || initialAnalysis);
     return {
       success: true,
       source: 'Smart Dynamic Content Engine (Cần dán Gemini API Key)',
@@ -321,29 +321,38 @@ export async function generateMultiPageVariations(options = {}) {
     const videoPart = await prepareVideoPart(rawTarget, geminiApiKey);
     const pageListDesc = pageAccounts.map(p => `Page ID "${p.id}" (${p.name})`).join('\n');
 
-    const promptText = `You are a master social media content creator.
-CRITICAL REQUIREMENT: Analyze the actual visual scenes, dialogue, actors, and action in the attached video clip.
-Write ${pageAccounts.length} COMPLETELY DISTINCT, authentic English Facebook post captions AND 100% UNIQUE DISTINCT TITLES for ${pageAccounts.length} different Facebook pages based on your real video analysis.
+    const masterContext = initialAnalysis || videoPrompt || videoTopic || '';
 
-RULES:
-1. EVERY SINGLE TITLE AND CAPTION MUST BE GROUNDED IN THE REAL VIDEO ANALYSIS.
-2. EVERY PAGE MUST HAVE A 100% UNIQUE TITLE AND CAPTION.
-3. Keep titles punchy, clean English headlines.
-4. Keep captions concise (2-3 impact sentences).
+    const promptText = `You are a master social media content strategist, video archivist, and viral storyteller.
+
+MASTER VIDEO ANALYSIS & CONTEXT:
+${masterContext ? `Original Deep Analysis: "${masterContext}"` : 'Analyze the visual scenes, dialogue, actors, and actions in the attached video.'}
+
+CRITICAL MANDATE FOR MULTI-PAGE VARIATIONS:
+Generate ${pageAccounts.length} HIGHLY SMART, COMPREHENSIVE, LONG-FORM, RICH FACEBOOK POST CAPTIONS and 100% UNIQUE HEADLINES for ${pageAccounts.length} different Facebook pages based on deep video analysis.
+
+RULES FOR MAXIMUM QUALITY & LENGTH:
+1. EVERY VARIATION CAPTION MUST BE A LONG-FORM, RICH POST (AT LEAST 3 TO 5 DETAILED PARAGRAPHS).
+   - Paragraph 1: High-impact hook and scene setup introducing the specific clip/moment.
+   - Paragraph 2: Deep breakdown of key actions, actors/people involved, comedy sketch, dialogue or punchlines.
+   - Paragraph 3: Contextual analysis, why this scene is iconic or viral, and emotional resonance.
+   - Paragraph 4: Engaging closing takeaways and strong audience conversation starter / call-to-action.
+2. DO NOT WRITE SHORT OR CONCISE CAPTIONS! Every single Fanpage post must match or exceed the depth and length of the master analysis above.
+3. EVERY PAGE MUST HAVE A 100% UNIQUE TITLE AND CAPTION (different narrative angles, different hooks, distinct vocabulary).
+4. Ground all details strictly in real video visual and audio content.
 
 Pages to generate for:
 ${pageListDesc}
 
-User prompt: "${videoPrompt || 'Create authentic post variations'}"
+User prompt: "${videoPrompt || 'Generate long, comprehensive post variations'}"
 
-Return ONLY raw JSON object:
+Return ONLY a raw JSON object:
 {
   "variations": {
     "PAGE_ID": {
-      "title": "Unique Punchy English Title",
-      "caption": "Authentic post caption describing the real video content",
-      "hashtags": "#Hashtag1 #Hashtag2",
-      "firstComment": "Natural engagement comment"
+      "title": "Unique Punchy English Headline",
+      "caption": "Full multi-paragraph long-form rich caption describing the video content in depth",
+      "hashtags": "#Hashtag1 #Hashtag2 #Hashtag3 #Hashtag4 #Hashtag5"
     }
   }
 }`;
@@ -368,8 +377,7 @@ Return ONLY raw JSON object:
         cleanedVariations[pageId] = {
           title: cleanTitleText(varObj.title || 'EXCLUSIVE VIDEO HIGHLIGHT'),
           caption: fixUtf8Encoding(varObj.caption || ''),
-          hashtags: fixUtf8Encoding(rawHashtags),
-          firstComment: fixUtf8Encoding(varObj.firstComment || 'Drop a comment below!')
+          hashtags: fixUtf8Encoding(rawHashtags)
         };
       }
 
@@ -382,7 +390,7 @@ Return ONLY raw JSON object:
   } catch (e) {
     console.warn('[Gemini Multimodal Variations Warning]:', e.message);
     // If Quota Exceeded or API error, seamlessly fallback to local dynamic variation engine so user is never blocked!
-    const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt);
+    const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt || initialAnalysis);
     return {
       success: true,
       source: 'Smart Dynamic Content Engine (Gemini Quota Exceeded Fallback)',
@@ -390,7 +398,7 @@ Return ONLY raw JSON object:
     };
   }
 
-  const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt);
+  const fallbackVariations = generateLocalFallbackVariations(pageAccounts, videoTopic, videoPrompt || initialAnalysis);
   return {
     success: true,
     source: 'Smart Dynamic Content Engine (Default Fallback)',
@@ -403,33 +411,25 @@ Return ONLY raw JSON object:
  */
 export function generateLocalFallbackVariations(pageAccounts, videoTopic = '', videoPrompt = '') {
   const baseTitle = videoTopic || 'EXCLUSIVE VIDEO SHOWCASE';
+  const baseContent = videoPrompt || 'Deep dive video highlight featuring incredible action and scenes.';
   const variations = {};
   
   const hooks = [
-    'Check out this incredible video clip!',
-    'Unbelievable highlight captured on camera!',
-    'Must-watch video highlight of the day!',
-    'Full breakdown of this amazing viral moment!',
-    'Watch what happens in this exclusive clip!',
-    'Top trending highlight you cannot miss!',
-    'Behind the scenes action revealed in full!'
-  ];
-
-  const comments = [
-    '👉 What do you think about this clip? Drop a comment below!',
-    '👉 Share your thoughts in the comments!',
-    '👉 Tag a friend who needs to see this video!',
-    '👉 Drop a 🔥 if you enjoyed this highlight!'
+    '🎬 EXCLUSIVE HIGHLIGHT BREAKDOWN: Check out this incredible video moment!',
+    '🔥 VIRAL CLIP RECAP: An unbelievable highlight captured on camera!',
+    '🌟 MUST-WATCH MOMENT OF THE DAY: Full scene breakdown and reaction!',
+    '🍿 BEHIND THE SCENES: Everything you need to know about this trending scene!',
+    '⚡ INSIDE LOOK: Watch what happens in this exclusive clip breakdown!'
   ];
 
   pageAccounts.forEach((page, idx) => {
     const hook = hooks[idx % hooks.length];
-    const comment = comments[idx % comments.length];
+    const longCaption = `${hook}\n\n${baseContent}\n\nThis video scene brings together incredible energy, memorable moments, and authentic reactions from everyone involved. From the opening sequence to the final payoff, every frame captures a unique blend of storytelling and entertainment.\n\nWhether you are watching this for the first time or revisiting an iconic clip, this highlight stands out as a true viral classic. Stay tuned for more exclusive clip breakdowns and updates right here on ${page.name}!`;
+
     variations[page.id] = {
       title: cleanTitleText(`${baseTitle} - ${page.name}`),
-      caption: fixUtf8Encoding(`${hook}\n\n${videoPrompt || baseTitle}`),
-      hashtags: '#ViralVideo #Trending #VideoHighlight',
-      firstComment: fixUtf8Encoding(comment)
+      caption: fixUtf8Encoding(longCaption),
+      hashtags: '#ViralVideo #TrendingHighlight #VideoAnalysis #MustWatch #Entertainment'
     };
   });
 
