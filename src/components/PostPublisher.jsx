@@ -132,7 +132,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
   const [activeVariationPageId, setActiveVariationPageId] = useState(null);
   const [isVariationModalOpen, setIsVariationModalOpen] = useState(false);
 
-  // Generate Multi-Page AI Variations
+  // Generate Multi-Page AI Variations (Optimized to reuse 1st AI analysis for Page 1)
   const handleGenerateVariations = async () => {
     if (selectedPageIds.length === 0) {
       setNotice({ type: 'error', text: 'Vui lòng chọn ít nhất 1 Fanpage để sinh biến thể AI.' });
@@ -140,8 +140,37 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
     }
 
     const targetPages = fbAccounts.filter(a => selectedPageIds.includes(a.id));
+    if (targetPages.length === 0) return;
+
+    const firstPage = targetPages[0];
+    const initialVariation = {
+      title: title || 'EXCLUSIVE VIDEO HIGHLIGHT',
+      caption: caption,
+      hashtags: hashtags || '#ViralVideo #Trending',
+      firstComment: firstComment || '👉 Check out this video and leave a reply below!'
+    };
+
+    const remainingPages = targetPages.slice(1);
+
+    // If only 1 page is selected, use the initial AI analysis as Page 1's variation without calling Gemini API again
+    if (remainingPages.length === 0) {
+      const singleVariationMap = { [firstPage.id]: initialVariation };
+      setAccountVariations(singleVariationMap);
+      setActiveVariationPageId(firstPage.id);
+      setIsVariationModalOpen(true);
+      setNotice({
+        type: 'success',
+        text: `✨ Fanpage "${firstPage.name}" tự động sử dụng ngay bản phân tích AI ban đầu làm biến thể. Không tốn thêm lượt gọi AI!`
+      });
+      return;
+    }
+
+    // For multiple pages (N > 1): Page 1 uses initial AI content, Gemini generates only for Page 2 to Page N
     setGeneratingVariations(true);
-    setNotice({ type: 'info', text: `🤖 Đang gọi AI Google Gemini 1.5 phân tích video & tạo ${targetPages.length} biến thể Tiếng Anh độc bản...` });
+    setNotice({
+      type: 'info',
+      text: `🤖 Trang "${firstPage.name}" giữ nguyên bản phân tích AI ban đầu. Đang gọi Gemini sinh thêm ${remainingPages.length} biến thể cho các trang còn lại...`
+    });
 
     try {
       const res = await fetch('/api/ai/generate-variations', {
@@ -152,19 +181,24 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           videoTopic: title || '',
           videoPrompt: caption || title || 'Phân tích video thu hút',
           originalName: mediaUrls[0]?.split('/')?.pop() || '',
-          pageAccounts: targetPages,
+          pageAccounts: remainingPages,
           model: 'gemini'
         })
       });
 
       const data = await res.json();
       if (data.success && data.variations) {
-        setAccountVariations(data.variations);
-        setActiveVariationPageId(targetPages[0]?.id || null);
-        setIsVariationModalOpen(true); // Automatically open variation modal popup
+        const combinedVariations = {
+          [firstPage.id]: initialVariation,
+          ...data.variations
+        };
+
+        setAccountVariations(combinedVariations);
+        setActiveVariationPageId(firstPage.id);
+        setIsVariationModalOpen(true);
         setNotice({
           type: 'success',
-          text: `🎉 Đã tạo thành công ${Object.keys(data.variations).length} biến thể phân tích Tiếng Anh cho ${targetPages.length} Fanpage!`
+          text: `🎉 Trang 1 ("${firstPage.name}") dùng bản phân tích AI ban đầu + Đã tạo mới ${Object.keys(data.variations).length} biến thể AI cho các Fanpage còn lại! (Tiết kiệm 1 lần gọi AI)`
         });
       } else {
         throw new Error(data.error || 'Không thể sinh biến thể AI.');
@@ -225,7 +259,7 @@ export default function PostPublisher({ accounts, draftFromAi, onClearDraftFromA
           mediaUrl: mediaUrls[0] || '',
           mediaUrls,
           mediaType,
-          postFormat: mediaType === 'video' ? 'reel' : 'standard',
+          postFormat: mediaType === 'video' ? 'reels' : 'standard',
           targetAccountIds: selectedPageIds,
           accountVariations: accountVariations,
           publishNow: postMode === 'now',

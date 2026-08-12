@@ -3,6 +3,9 @@
  */
 
 export function fixUtf8Encoding(inputStr) {
+  if (Array.isArray(inputStr)) {
+    inputStr = inputStr.join(' ');
+  }
   if (!inputStr || typeof inputStr !== 'string') return inputStr || '';
 
   let str = inputStr;

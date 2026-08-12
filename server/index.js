@@ -3,7 +3,14 @@ import cors from 'cors';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+import { connectDB } from './dbMongo.js';
 import { db } from './db.js';
+import { authMiddleware } from './middleware/authMiddleware.js';
+import { register, login, getMe, updateSettings } from './controllers/authController.js';
 import { exchangeForLongLivedToken, getFacebookPages } from './services/accountService.js';
 import { executePostPublish } from './services/postPublisher.js';
 import { initScheduler } from './services/scheduler.js';
@@ -12,6 +19,9 @@ import { generateAiContent, suggestAiCommentReply, analyzeVideoContent, generate
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Connect to MongoDB Cloud Atlas
+connectDB();
 
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
@@ -59,74 +69,32 @@ const upload = multer({
 // Initialize Scheduler Worker
 initScheduler();
 
-// ==================== SECURITY & AUTH API ==================== //
+// ==================== AUTHENTICATION API ==================== //
 
-// Check PIN configured status
-app.get('/api/auth/pin-status', (req, res) => {
-  res.json({ success: true, isPinConfigured: db.isPinConfigured() });
-});
-
-// Initial PIN Setup
-app.post('/api/auth/setup-pin', (req, res) => {
-  try {
-    const { newPin } = req.body;
-    db.updatePin(newPin);
-    res.json({ success: true, message: 'Khởi tạo mã PIN bảo mật thành công!' });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
-
-// Verify PIN
-app.post('/api/auth/verify-pin', (req, res) => {
-  const { pin } = req.body;
-  const isValid = db.verifyPin(pin);
-  if (isValid) {
-    res.json({ success: true, message: 'Xác thực mã PIN thành công!' });
-  } else {
-    res.status(401).json({ success: false, error: 'Mã PIN bảo mật không chính xác!' });
-  }
-});
-
-// Change PIN
-app.post('/api/auth/change-pin', (req, res) => {
-  try {
-    const { currentPin, newPin } = req.body;
-    if (!db.verifyPin(currentPin)) {
-      return res.status(401).json({ success: false, error: 'Mã PIN hiện tại không chính xác!' });
-    }
-    db.updatePin(newPin);
-    res.json({ success: true, message: 'Đã đổi mã PIN bảo mật thành công!' });
-  } catch (err) {
-    res.status(400).json({ success: false, error: err.message });
-  }
-});
+app.post('/api/auth/register', register);
+app.post('/api/auth/login', login);
+app.get('/api/auth/me', authMiddleware, getMe);
 
 // ==================== APP SETTINGS API ==================== //
 
-app.get('/api/settings', (req, res) => {
-  const settings = db.getSettings();
+app.get('/api/settings', authMiddleware, async (req, res) => {
+  const settings = await db.getSettings(req.userId);
   const { securityPin, ...safeSettings } = settings;
   res.json({ success: true, settings: safeSettings });
 });
 
-app.post('/api/settings', (req, res) => {
-  const { appId, appSecret, openaiApiKey, grokApiKey, geminiApiKey } = req.body;
-  const settings = db.saveSettings({ appId, appSecret, openaiApiKey, grokApiKey, geminiApiKey });
-  const { securityPin, ...safeSettings } = settings;
-  res.json({ success: true, settings: safeSettings });
-});
+app.post('/api/settings', authMiddleware, updateSettings);
 
 // ==================== FACEBOOK ACCOUNTS & ROLES API ==================== //
 
-app.post('/api/accounts/connect', async (req, res) => {
+app.post('/api/accounts/connect', authMiddleware, async (req, res) => {
   try {
     const { token } = req.body;
     if (!token || !token.trim()) {
       return res.status(400).json({ success: false, error: 'Vui lòng dán Access Token.' });
     }
 
-    const settings = db.getSettings();
+    const settings = await db.getSettings(req.userId);
 
     let tokenInfo = { accessToken: token.trim(), isLongLived: false };
     if (settings.appId && settings.appSecret) {
@@ -142,14 +110,16 @@ app.post('/api/accounts/connect', async (req, res) => {
     const addedAccounts = [];
 
     for (const page of pages) {
-      db.saveAccount({ ...page, tokenStatus: 'active', lastCheckedAt: new Date().toISOString() });
+      await db.saveAccount(req.userId, { ...page, tokenStatus: 'active', lastCheckedAt: new Date().toISOString() });
       addedAccounts.push(page);
     }
+
+    const updatedAccounts = await db.getAccounts(req.userId);
 
     res.json({
       success: true,
       tokenInfo,
-      accounts: db.getAccounts(),
+      accounts: updatedAccounts,
       addedCount: addedAccounts.length
     });
 
@@ -158,40 +128,57 @@ app.post('/api/accounts/connect', async (req, res) => {
   }
 });
 
-app.get('/api/accounts', (req, res) => {
-  res.json({ success: true, accounts: db.getAccounts() });
+app.get('/api/accounts', authMiddleware, async (req, res) => {
+  const accounts = await db.getAccounts(req.userId);
+  res.json({ success: true, accounts });
 });
 
-app.put('/api/accounts/:platform/:id/group', (req, res) => {
+app.put('/api/accounts/:platform/:id/group', authMiddleware, async (req, res) => {
   try {
     const { platform, id } = req.params;
     const { group } = req.body;
-    const acc = db.updateAccountGroup(id, platform, group);
+    const acc = await db.updateAccountGroup(req.userId, id, platform, group);
     res.json({ success: true, account: acc });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.delete('/api/accounts/:platform/:id', (req, res) => {
+app.delete('/api/accounts/:platform/:id', authMiddleware, async (req, res) => {
   try {
     const { platform, id } = req.params;
-    const accounts = db.deleteAccount(id, platform);
+    const accounts = await db.deleteAccount(req.userId, id, platform);
     res.json({ success: true, accounts });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/accounts/:platform/:id/check-token', async (req, res) => {
+app.post('/api/accounts/check-tokens', authMiddleware, async (req, res) => {
+  try {
+    const accounts = await db.getAccounts(req.userId);
+    let checkedCount = 0;
+    for (const account of accounts) {
+      const statusResult = await checkTokenHealth(account);
+      await db.updateAccountStatus(req.userId, account.id, account.platform || 'facebook', statusResult.status, statusResult.error);
+      checkedCount++;
+    }
+    const updatedAccounts = await db.getAccounts(req.userId);
+    res.json({ success: true, checkedCount, accounts: updatedAccounts });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/accounts/:platform/:id/check-token', authMiddleware, async (req, res) => {
   try {
     const { platform, id } = req.params;
-    const accounts = db.getAccounts();
+    const accounts = await db.getAccounts(req.userId);
     const account = accounts.find(a => a.id === id && a.platform === platform);
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy tài khoản.' });
 
     const statusResult = await checkTokenHealth(account);
-    const updatedAcc = db.updateAccountStatus(id, platform, statusResult.status, statusResult.error);
+    const updatedAcc = await db.updateAccountStatus(req.userId, id, platform, statusResult.status, statusResult.error);
     res.json({ success: true, account: updatedAcc, health: statusResult });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -199,10 +186,10 @@ app.post('/api/accounts/:platform/:id/check-token', async (req, res) => {
 });
 
 // Page Roles API
-app.get('/api/accounts/:id/roles', async (req, res) => {
+app.get('/api/accounts/:id/roles', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const accounts = db.getAccounts();
+    const accounts = await db.getAccounts(req.userId);
     const account = accounts.find(a => a.id === id && a.platform === 'facebook');
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
 
@@ -213,11 +200,11 @@ app.get('/api/accounts/:id/roles', async (req, res) => {
   }
 });
 
-app.post('/api/accounts/:id/roles', async (req, res) => {
+app.post('/api/accounts/:id/roles', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const { userEmail, role } = req.body;
-    const accounts = db.getAccounts();
+    const accounts = await db.getAccounts(req.userId);
     const account = accounts.find(a => a.id === id && a.platform === 'facebook');
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
 
@@ -230,7 +217,7 @@ app.post('/api/accounts/:id/roles', async (req, res) => {
 
 // ==================== MEDIA UPLOADS API ==================== //
 
-app.post('/api/upload', upload.array('media', 10), (req, res) => {
+app.post('/api/upload', authMiddleware, upload.array('media', 10), (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, error: 'Không có tệp media nào được tải lên.' });
@@ -254,11 +241,12 @@ app.post('/api/upload', upload.array('media', 10), (req, res) => {
 
 // ==================== POSTS & PUBLISHING API ==================== //
 
-app.get('/api/posts', (req, res) => {
-  res.json({ success: true, posts: db.getPosts() });
+app.get('/api/posts', authMiddleware, async (req, res) => {
+  const posts = await db.getPosts(req.userId);
+  res.json({ success: true, posts });
 });
 
-app.post('/api/posts', (req, res) => {
+app.post('/api/posts', authMiddleware, async (req, res) => {
   try {
     const { 
       title, 
@@ -276,7 +264,7 @@ app.post('/api/posts', (req, res) => {
       scheduledAt 
     } = req.body;
 
-    const newPost = db.createPost({
+    const newPost = await db.createPost(req.userId, {
       title,
       caption,
       hashtags,
@@ -292,8 +280,8 @@ app.post('/api/posts', (req, res) => {
       scheduledAt
     });
 
-    if (publishNow) {
-      executePostPublish(newPost.id).catch(err => console.error('Immediate Publish Error:', err));
+    if (publishNow && newPost) {
+      executePostPublish(newPost.id, req.userId).catch(err => console.error('Immediate Publish Error:', err));
     }
 
     res.json({ success: true, post: newPost });
@@ -302,11 +290,11 @@ app.post('/api/posts', (req, res) => {
   }
 });
 
-app.put('/api/posts/:id', (req, res) => {
+app.put('/api/posts/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    const post = db.updatePost(id, updates);
+    const post = await db.updatePost(req.userId, id, updates);
     if (!post) return res.status(404).json({ success: false, error: 'Không tìm thấy bài viết.' });
     res.json({ success: true, post });
   } catch (err) {
@@ -314,45 +302,48 @@ app.put('/api/posts/:id', (req, res) => {
   }
 });
 
-app.post('/api/posts/:id/publish', async (req, res) => {
+app.post('/api/posts/:id/publish', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await executePostPublish(id);
+    const result = await executePostPublish(id, req.userId);
     res.json({ success: true, result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-app.delete('/api/posts/:id', (req, res) => {
+app.delete('/api/posts/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
-  const posts = db.deletePost(id);
+  const posts = await db.deletePost(req.userId, id);
   res.json({ success: true, posts });
 });
 
 // ==================== AI GENERATOR & VIDEO ANALYSIS API ==================== //
 
-app.post('/api/ai/generate', async (req, res) => {
+app.post('/api/ai/generate', authMiddleware, async (req, res) => {
   try {
-    const result = await generateAiContent(req.body);
+    const userSettings = await db.getSettings(req.userId);
+    const result = await generateAiContent({ ...req.body, geminiApiKey: userSettings.geminiApiKey });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/ai/analyze-video', async (req, res) => {
+app.post('/api/ai/analyze-video', authMiddleware, async (req, res) => {
   try {
-    const result = await analyzeVideoContent(req.body);
+    const userSettings = await db.getSettings(req.userId);
+    const result = await analyzeVideoContent({ ...req.body, geminiApiKey: userSettings.geminiApiKey });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-app.post('/api/ai/generate-variations', async (req, res) => {
+app.post('/api/ai/generate-variations', authMiddleware, async (req, res) => {
   try {
-    const result = await generateMultiPageVariations(req.body);
+    const userSettings = await db.getSettings(req.userId);
+    const result = await generateMultiPageVariations({ ...req.body, geminiApiKey: userSettings.geminiApiKey });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -360,10 +351,11 @@ app.post('/api/ai/generate-variations', async (req, res) => {
 });
 
 // AI Customer Reply Suggestion
-app.post('/api/ai/suggest-reply', async (req, res) => {
+app.post('/api/ai/suggest-reply', authMiddleware, async (req, res) => {
   try {
     const { comment, postTopic } = req.body;
-    const replyText = await suggestAiCommentReply(comment || '', postTopic || '');
+    const userSettings = await db.getSettings(req.userId);
+    const replyText = await suggestAiCommentReply(comment || '', postTopic || '', userSettings.geminiApiKey);
     res.json({ success: true, replyText });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -372,10 +364,11 @@ app.post('/api/ai/suggest-reply', async (req, res) => {
 
 // ==================== LIVE COMMENTS & REPLY MANAGEMENT API ==================== //
 
-app.get('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
+app.get('/api/accounts/:accId/posts/:postId/comments', authMiddleware, async (req, res) => {
   try {
     const { accId, postId } = req.params;
-    const account = db.getAccounts().find(a => a.id === accId);
+    const accounts = await db.getAccounts(req.userId);
+    const account = accounts.find(a => a.id === accId);
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
 
     const result = await getPostLiveComments(account, postId);
@@ -385,39 +378,16 @@ app.get('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
   }
 });
 
-app.post('/api/accounts/:accId/posts/:postId/comments', async (req, res) => {
+app.post('/api/accounts/:accId/posts/:postId/comments', authMiddleware, async (req, res) => {
   try {
     const { accId } = req.params;
     const { targetId, message } = req.body;
-    const account = db.getAccounts().find(a => a.id === accId);
+    const accounts = await db.getAccounts(req.userId);
+    const account = accounts.find(a => a.id === accId);
     if (!account) return res.status(404).json({ success: false, error: 'Không tìm thấy Fanpage.' });
     if (!message || !message.trim()) return res.status(400).json({ success: false, error: 'Bình luận không được để trống.' });
 
     const result = await postCommentReply(account, targetId, message);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// ==================== BACKUP IMPORT & EXPORT API ==================== //
-
-app.get('/api/backup/export', (req, res) => {
-  try {
-    const backupData = db.exportBackupData();
-    const fileName = `fb_publisher_backup_${new Date().toISOString().slice(0, 10)}.json`;
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.json(backupData);
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-app.post('/api/backup/import', (req, res) => {
-  try {
-    const backupData = req.body;
-    const result = db.importBackupData(backupData);
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

@@ -161,16 +161,15 @@ export default function AiContentGenerator({ accounts, onSendToPublisher, onOpen
           </div>
 
           <div style={{ display: 'flex', gap: '10px' }}>
-            {onOpenGuide && (
-              <button 
-                type="button" 
-                className="btn btn-secondary" 
-                style={{ fontSize: '0.8rem', padding: '6px 12px' }}
-                onClick={onOpenGuide}
-              >
-                📖 Hướng Dẫn Lấy Keys
-              </button>
-            )}
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-secondary"
+              style={{ fontSize: '0.8rem', padding: '6px 12px', textDecoration: 'none', color: '#38bdf8', border: '1px solid #0284c7', background: 'rgba(56, 189, 248, 0.1)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            >
+              🔗 Graph API Explorer ↗
+            </a>
             <button 
               type="button" 
               className="btn btn-secondary"

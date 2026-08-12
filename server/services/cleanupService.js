@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
+import mongoose from 'mongoose';
 import { db } from '../db.js';
+import { Post } from '../models/Post.js';
 
 const UPLOADS_DIR = path.resolve('uploads');
 
@@ -8,15 +10,20 @@ const UPLOADS_DIR = path.resolve('uploads');
  * Clean up old unreferenced media files from uploads/ folder
  * @param {number} maxAgeDays Default 7 days
  */
-export function cleanUploadsFolder(maxAgeDays = 7) {
+export async function cleanUploadsFolder(maxAgeDays = 7) {
   if (!fs.existsSync(UPLOADS_DIR)) return { deletedCount: 0, freedBytes: 0 };
 
   try {
     const now = Date.now();
     const maxAgeMs = maxAgeDays * 24 * 60 * 60 * 1000;
 
-    // Get list of media filenames currently referenced in posts DB
-    const posts = db.getPosts();
+    let posts = [];
+    if (mongoose.connection.readyState === 1) {
+      posts = await Post.find({});
+    } else {
+      posts = await db.getPosts();
+    }
+
     const activeFilenames = new Set();
 
     for (const post of posts) {

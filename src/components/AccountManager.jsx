@@ -302,9 +302,15 @@ export default function AccountManager({ accounts, fetchAccounts, posts = [], fe
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>
               Kết Nối Access Token Fanpage
             </h3>
-            <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.75rem' }} onClick={onOpenGuide}>
-              HD Lấy Token
-            </button>
+            <a
+              href="https://developers.facebook.com/tools/explorer/"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-secondary"
+              style={{ padding: '4px 10px', fontSize: '0.75rem', textDecoration: 'none', color: '#38bdf8', border: '1px solid #0284c7', background: 'rgba(56, 189, 248, 0.1)', fontWeight: 600 }}
+            >
+              🔗 Lấy Token (Graph API Explorer) ↗
+            </a>
           </div>
 
           <form onSubmit={handleConnectToken}>

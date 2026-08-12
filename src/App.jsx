@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginModal from './components/LoginModal';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import AccountManager from './components/AccountManager';
 import PostPublisher from './components/PostPublisher';
 import AiContentGenerator from './components/AiContentGenerator';
 import PostHistory from './components/PostHistory';
-import ApiGuideModal from './components/ApiGuideModal';
-import BackupModal from './components/BackupModal';
 
 const VALID_TABS = ['dashboard', 'publish', 'ai', 'accounts', 'history'];
 
-export default function App() {
-  // Persist activeTab in localStorage so F5 reload stays on current page
+function MainAppContent() {
+  const { user, loading } = useAuth();
+
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem('activeTab');
     return VALID_TABS.includes(saved) ? saved : 'dashboard';
@@ -19,8 +20,6 @@ export default function App() {
 
   const [accounts, setAccounts] = useState([]);
   const [posts, setPosts] = useState([]);
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
-  const [isBackupOpen, setIsBackupOpen] = useState(false);
   const [draftFromAi, setDraftFromAi] = useState(null);
 
   const currentTab = VALID_TABS.includes(activeTab) ? activeTab : 'dashboard';
@@ -32,9 +31,11 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchAccounts();
-    fetchPosts();
-  }, []);
+    if (user) {
+      fetchAccounts();
+      fetchPosts();
+    }
+  }, [user]);
 
   const fetchAccounts = async () => {
     try {
@@ -65,6 +66,21 @@ export default function App() {
     changeTab('publish');
   };
 
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="spinner" style={{ width: '40px', height: '40px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+          <div>Đang xác thực phiên làm việc...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginModal />;
+  }
+
   return (
     <div className="app-container">
       {/* Header Bar */}
@@ -72,8 +88,6 @@ export default function App() {
         activeTab={currentTab} 
         setActiveTab={changeTab} 
         accountCount={accounts.length}
-        onOpenGuide={() => setIsGuideOpen(true)}
-        onOpenBackup={() => setIsBackupOpen(true)}
       />
 
       {/* Main Active Tab View */}
@@ -104,7 +118,6 @@ export default function App() {
           <AiContentGenerator 
             accounts={accounts}
             onSendToPublisher={handleSendAiToPublisher}
-            onOpenGuide={() => setIsGuideOpen(true)}
             onPostCreated={() => {
               fetchPosts();
               changeTab('history');
@@ -118,7 +131,6 @@ export default function App() {
             fetchAccounts={fetchAccounts} 
             posts={posts}
             fetchPosts={fetchPosts}
-            onOpenGuide={() => setIsGuideOpen(true)}
           />
         )}
 
@@ -130,23 +142,14 @@ export default function App() {
           />
         )}
       </main>
-
-      {/* Meta API Interactive Guide Modal */}
-      <ApiGuideModal 
-        isOpen={isGuideOpen} 
-        onClose={() => setIsGuideOpen(false)} 
-      />
-
-      {/* Data Backup & Restore Modal */}
-      <BackupModal
-        isOpen={isBackupOpen}
-        onClose={() => setIsBackupOpen(false)}
-        onBackupRestored={() => {
-          fetchAccounts();
-          fetchPosts();
-          setIsBackupOpen(false);
-        }}
-      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainAppContent />
+    </AuthProvider>
   );
 }

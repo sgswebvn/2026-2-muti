@@ -9,17 +9,17 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
   // Live Comments modal state: { post, account }
   const [activeCommentSession, setActiveCommentSession] = useState(null);
 
-  // Retry / Publish Now
+  // Trigger Immediate Execution for Scheduled / Draft / Failed Post
   const handlePublishNow = async (id) => {
     setPublishingId(id);
     try {
       const res = await fetch(`/api/posts/${id}/publish`, { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        alert('Đăng bài thành công!');
+        alert('🚀 Đã kích hoạt đăng bài thành công!');
         fetchPosts();
       } else {
-        alert(`Lỗi khi đăng: ${data.error || 'Thao tác thất bại'}`);
+        alert(`⚠️ Lỗi khi đăng bài: ${data.error || 'Thao tác thất bại'}`);
       }
     } catch (err) {
       alert('Không thể kết nối máy chủ để đăng bài.');
@@ -28,9 +28,13 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
     }
   };
 
-  // Delete post
-  const handleDeletePost = async (id) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa bài viết này khỏi lịch sử?')) return;
+  // Delete / Cancel scheduled post
+  const handleDeletePost = async (id, isScheduled) => {
+    const msg = isScheduled 
+      ? 'Bạn có chắc chắn muốn HỦY LỊCH và xóa bài viết này?' 
+      : 'Bạn có chắc chắn muốn xóa bài viết này khỏi lịch sử?';
+      
+    if (!window.confirm(msg)) return;
     try {
       await fetch(`/api/posts/${id}`, { method: 'DELETE' });
       fetchPosts();
@@ -70,15 +74,103 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
     }
   };
 
+  // Status Badge Styling Helper
+  const renderStatusBadge = (status, scheduledAt) => {
+    switch (status) {
+      case 'scheduled':
+        return (
+          <span 
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(234, 179, 8, 0.2)',
+              border: '1px solid rgba(234, 179, 8, 0.5)',
+              color: '#facc15',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            ⏳ ĐANG LÊN LỊCH
+          </span>
+        );
+      case 'publishing':
+        return (
+          <span 
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(59, 130, 246, 0.2)',
+              border: '1px solid rgba(59, 130, 246, 0.5)',
+              color: '#60a5fa',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            🔄 ĐANG TIẾN HÀNH ĐĂNG...
+          </span>
+        );
+      case 'published':
+        return (
+          <span 
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(34, 197, 94, 0.2)',
+              border: '1px solid rgba(34, 197, 94, 0.5)',
+              color: '#4ade80',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            ✅ ĐÃ ĐĂNG THÀNH CÔNG
+          </span>
+        );
+      case 'failed':
+        return (
+          <span 
+            style={{
+              padding: '4px 10px',
+              borderRadius: '6px',
+              background: 'rgba(239, 68, 68, 0.2)',
+              border: '1px solid rgba(239, 68, 68, 0.5)',
+              color: '#f87171',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            ❌ ĐĂNG THẤT BẠI
+          </span>
+        );
+      default:
+        return (
+          <span className={`status-badge ${status}`}>
+            {status.toUpperCase()}
+          </span>
+        );
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div className="glass-card" style={{ padding: '24px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
           <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-            Lịch Sử Bài Đăng & Quản Lý Tương Tác ({posts.length})
+            Lịch Sử Bài Đăng & Quản Lý Lên Lịch Tự Động ({posts.length})
           </h3>
           <button className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: '0.85rem' }} onClick={fetchPosts}>
-            Làm Mới Lịch Sử
+            🔄 Làm Mới Danh Sách
           </button>
         </div>
 
@@ -90,6 +182,7 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             {posts.map((post) => {
               const results = post.results || {};
+              const isScheduled = post.status === 'scheduled';
 
               return (
                 <div 
@@ -97,8 +190,8 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                   className="glass-card" 
                   style={{ 
                     padding: '18px', 
-                    background: '#0f172a',
-                    border: '1px solid #334155'
+                    background: isScheduled ? 'linear-gradient(145deg, #0f172a, #1e1b4b)' : '#0f172a',
+                    border: isScheduled ? '1px solid #6366f1' : '1px solid #334155'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
@@ -126,24 +219,22 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                       )}
 
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                          {/* Status Badges */}
-                          <span className={`status-badge ${post.status}`}>
-                            {post.status.toUpperCase()}
-                          </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                          {/* Custom Status Badge */}
+                          {renderStatusBadge(post.status, post.scheduledAt)}
 
                           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            Khởi tạo: {new Date(post.createdAt).toLocaleString('vi-VN')}
+                            Tạo bài: {new Date(post.createdAt).toLocaleString('vi-VN')}
                           </span>
 
                           {post.scheduledAt && (
-                            <span style={{ fontSize: '0.8rem', color: '#facc15', fontWeight: 600 }}>
-                              Hẹn giờ: {new Date(post.scheduledAt).toLocaleString('vi-VN')}
+                            <span style={{ fontSize: '0.8rem', color: '#facc15', fontWeight: 700, background: 'rgba(250, 204, 21, 0.1)', padding: '2px 8px', borderRadius: '6px' }}>
+                              📅 Thời gian lên lịch: {new Date(post.scheduledAt).toLocaleString('vi-VN')}
                             </span>
                           )}
                         </div>
 
-                        {post.title && <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '4px' }}>{post.title}</h4>}
+                        {post.title && <h4 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '4px', color: '#ffffff' }}>{post.title}</h4>}
                         <p style={{ fontSize: '0.875rem', color: 'var(--text-main)', lineHeight: '1.4', marginBottom: '8px' }}>
                           {post.caption?.substring(0, 160)}{post.caption?.length > 160 ? '...' : ''}
                         </p>
@@ -187,7 +278,7 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                                         style={{ fontSize: '0.7rem', padding: '2px 8px' }}
                                         onClick={() => setActiveCommentSession({ post, account: matchedAcc })}
                                       >
-                                        💬 Quản Lý & Rep Bình Luận Trực Tiếp
+                                        💬 Quản Lý Bình Luận Live
                                       </button>
                                     )}
 
@@ -212,15 +303,15 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                       </div>
                     </div>
 
-                    {/* Neatly Redesigned Action Buttons */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '120px' }}>
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: '130px' }}>
                       <button 
                         className="btn btn-primary" 
-                        style={{ padding: '6px 12px', fontSize: '0.8rem', fontWeight: 600 }}
+                        style={{ padding: '7px 12px', fontSize: '0.8rem', fontWeight: 700, background: isScheduled ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' : undefined }}
                         onClick={() => handlePublishNow(post.id)}
                         disabled={publishingId === post.id}
                       >
-                        {publishingId === post.id ? 'Đang Đăng...' : 'Đăng Lại'}
+                        {publishingId === post.id ? 'Đang Đăng...' : (isScheduled ? '🚀 Đăng Ngay Tức Thì' : '🔄 Đăng Lại')}
                       </button>
 
                       <button 
@@ -234,9 +325,9 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                       <button 
                         className="btn btn-danger" 
                         style={{ padding: '6px 12px', fontSize: '0.8rem', fontWeight: 600 }}
-                        onClick={() => handleDeletePost(post.id)}
+                        onClick={() => handleDeletePost(post.id, isScheduled)}
                       >
-                        Xóa
+                        {isScheduled ? '❌ Hủy Lịch' : 'Xóa'}
                       </button>
                     </div>
                   </div>
@@ -258,9 +349,9 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
 
       {/* EDIT POST MODAL */}
       {editingPost && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '520px', padding: '24px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px' }}>Chỉnh Sửa Bài Viết</h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '540px', padding: '24px', background: '#0f172a', border: '1px solid rgba(255,255,255,0.15)' }}>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '16px', color: '#60a5fa' }}>Chỉnh Sửa Bài Viết / Lịch Đăng</h3>
 
             <form onSubmit={handleSaveEdit}>
               <div className="form-group" style={{ marginBottom: '12px' }}>
@@ -294,7 +385,7 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                 />
               </div>
 
-              <div className="form-group" style={{ marginBottom: '18px' }}>
+              <div className="form-group" style={{ marginBottom: '12px' }}>
                 <label className="form-label">Bình luận đầu (First comment / Seeding)</label>
                 <textarea 
                   className="textarea-field" 
@@ -303,6 +394,18 @@ export default function PostHistory({ posts, accounts = [], fetchPosts }) {
                   onChange={(e) => setEditingPost({ ...editingPost, firstComment: e.target.value })} 
                 />
               </div>
+
+              {editingPost.status === 'scheduled' && (
+                <div className="form-group" style={{ marginBottom: '18px', background: 'rgba(234, 179, 8, 0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.3)' }}>
+                  <label className="form-label" style={{ color: '#facc15' }}>Thay đổi ngày & giờ lên lịch</label>
+                  <input 
+                    type="datetime-local" 
+                    className="input-field" 
+                    value={editingPost.scheduledAt ? new Date(new Date(editingPost.scheduledAt).getTime() - new Date(editingPost.scheduledAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : ''} 
+                    onChange={(e) => setEditingPost({ ...editingPost, scheduledAt: new Date(e.target.value).toISOString() })} 
+                  />
+                </div>
+              )}
 
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setEditingPost(null)}>
